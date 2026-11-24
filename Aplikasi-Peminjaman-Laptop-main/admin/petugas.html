@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Data Petugas - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/validator.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['admin']);
+    if (user) {
+      layout('Data Petugas', 'admin', 'Data Petugas');
+      document.getElementById('content').innerHTML = `
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Data Petugas / Laboran</h2>
+            <p class="text-sm text-slate-500">Kelola master data petugas laboratorium peminjaman laptop.</p>
+          </div>
+          <button onclick="openForm()" class="btn-primary">
+            <i data-lucide="plus"></i> Tambah Petugas
+          </button>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+          <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+              <input id="search" class="input pl-9" placeholder="Cari NIP, nama petugas, atau username...">
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 text-slate-500">
+                <tr>
+                  <th class="text-left px-4 py-3">NIP</th>
+                  <th class="text-left px-4 py-3">Nama Lengkap Petugas</th>
+                  <th class="text-left px-4 py-3">Username Akun</th>
+                  <th class="text-left px-4 py-3">Status</th>
+                  <th class="px-4 py-3 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      lucide.createIcons();
+
+      const render = () => {
+        const data = DB.get('petugas');
+        const q = document.getElementById('search').value.toLowerCase();
+        const filtered = data.filter(x => JSON.stringify(x).toLowerCase().includes(q));
+
+        document.getElementById('rows').innerHTML = filtered.map(x => `
+          <tr class="border-t border-slate-100 hover:bg-slate-50">
+            <td class="px-4 py-3 font-semibold text-slate-800">${esc(x.nip)}</td>
+            <td class="px-4 py-3 font-medium">${esc(x.name)}</td>
+            <td class="px-4 py-3 text-slate-600 font-mono text-xs">@${esc(x.username)}</td>
+            <td class="px-4 py-3">${badge(x.status)}</td>
+            <td class="px-4 py-3 text-right whitespace-nowrap">
+              <button class="icon-btn" title="Lihat detail" onclick="openDetail(${x.id})"><i data-lucide="eye"></i></button>
+              <button class="icon-btn text-teal-600" title="Edit" onclick="openForm(${x.id})"><i data-lucide="pencil"></i></button>
+              <button class="icon-btn text-red-600" title="Hapus" onclick="removeData(${x.id})"><i data-lucide="trash-2"></i></button>
+            </td>
+          </tr>
+        `).join('') || `<tr><td colspan="5" class="text-center py-8 text-slate-400">Tidak ada data petugas.</td></tr>`;
+
+        lucide.createIcons();
+      };
+
+      document.getElementById('search').addEventListener('input', render);
+
+      const petugasValidationSchema = (id = null) => ({
+        nip: [
+          Validator.rules.required('NIP wajib diisi'),
+          Validator.rules.numeric('NIP hanya boleh angka'),
+          Validator.rules.minLength(4, 'NIP minimal 4 angka'),
+          Validator.rules.unique('petugas', 'nip', id, 'NIP sudah terdaftar')
+        ],
+        name: [
+          Validator.rules.required('Nama petugas wajib diisi'),
+          Validator.rules.minLength(3, 'Nama minimal 3 karakter')
+        ],
+        username: [
+          Validator.rules.required('Username wajib diisi'),
+          Validator.rules.username('Format username tidak valid (3-20 karakter)'),
+          Validator.rules.unique('users', 'username', null, 'Username sudah digunakan akun lain')
+        ],
+        status: [Validator.rules.inList(['Aktif', 'Nonaktif'], 'Status tidak valid')]
+      });
+
+      function openForm(id = null) {
+        const data = DB.get('petugas');
+        const item = id ? data.find(x => x.id === id) : {};
+        const isEdit = !!id;
+
+        modal(
+          isEdit ? 'Edit Data Petugas' : 'Tambah Petugas Baru',
+          `
+          <form id="dataForm" class="grid sm:grid-cols-2 gap-4" novalidate>
+            <div>
+              <label class="label">NIP (Nomor Induk Pegawai) <span class="text-red-500">*</span></label>
+              <input class="input" name="nip" id="nip" placeholder="Contoh: 1989003" value="${esc(item.nip || '')}" required>
+            </div>
+            <div>
+              <label class="label">Nama Lengkap Petugas <span class="text-red-500">*</span></label>
+              <input class="input" name="name" id="name" placeholder="Contoh: Dewi Anggraini, S.Kom" value="${esc(item.name || '')}" required>
+            </div>
+            <div>
+              <label class="label">Username Login <span class="text-red-500">*</span></label>
+              <input class="input" name="username" id="username" placeholder="Contoh: dewi_lab" value="${esc(item.username || '')}" required>
+            </div>
+            <div>
+              <label class="label">Status Keaktifan <span class="text-red-500">*</span></label>
+              <select class="input" name="status" id="status" required>
+                <option value="Aktif" ${item.status === 'Aktif' ? 'selected' : ''}>Aktif</option>
+                <option value="Nonaktif" ${item.status === 'Nonaktif' ? 'selected' : ''}>Nonaktif</option>
+              </select>
+            </div>
+          </form>
+          `,
+          `
+          <button onclick="closeModal()" class="btn-secondary">Batal</button>
+          <button onclick="saveData(${id || 'null'})" class="btn-primary">
+            <i data-lucide="shield-check"></i> Simpan (Prepared)
+          </button>
+          `
+        );
+
+        const form = document.getElementById('dataForm');
+        const schema = petugasValidationSchema(id);
+        Validator.attach(form, schema);
+        lucide.createIcons();
+      }
+
+      function saveData(id) {
+        const form = document.getElementById('dataForm');
+        const schema = petugasValidationSchema(id);
+
+        if (!Validator.validateForm(form, schema)) return;
+
+        const formData = new FormData(form);
+        const obj = Object.fromEntries(formData);
+
+        if (id) {
+          const stmt = DB.prepare("UPDATE petugas SET nip = :nip, name = :name, username = :username, status = :status WHERE id = :id");
+          stmt.execute({ ...obj, id: id });
+
+          const uStmt = DB.prepare("UPDATE users SET name = ? WHERE username = ?");
+          uStmt.execute([obj.name, obj.username]);
+
+          toast('Data petugas berhasil diperbarui (Prepared Statement)');
+        } else {
+          const stmt = DB.prepare("INSERT INTO petugas (nip, name, username, status) VALUES (:nip, :name, :username, :status)");
+          stmt.execute(obj);
+
+          const userCheck = DB.get('users').find(u => u.username === obj.username);
+          if (!userCheck) {
+            const userStmt = DB.prepare("INSERT INTO users (username, password, role, name) VALUES (?, ?, ?, ?)");
+            userStmt.execute([obj.username, 'petugas123', 'petugas', obj.name]);
+          }
+
+          toast('Petugas baru berhasil ditambahkan (Prepared Statement)');
+        }
+
+        closeModal();
+        render();
+      }
+
+      function openDetail(id) {
+        const data = DB.get('petugas');
+        const x = data.find(a => a.id === id);
+        if (!x) return;
+
+        modal(
+          'Detail Data Petugas',
+          `
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div><p class="text-xs text-slate-400">NIP</p><p class="font-semibold mt-1 text-slate-800">${esc(x.nip)}</p></div>
+            <div><p class="text-xs text-slate-400">Nama Lengkap</p><p class="font-semibold mt-1 text-slate-800">${esc(x.name)}</p></div>
+            <div><p class="text-xs text-slate-400">Username</p><p class="font-semibold mt-1 text-slate-800">@${esc(x.username)}</p></div>
+            <div><p class="text-xs text-slate-400">Status</p><p class="mt-1">${badge(x.status)}</p></div>
+          </div>
+          `,
+          `<button onclick="closeModal()" class="btn-secondary">Tutup</button>`
+        );
+      }
+
+      function removeData(id) {
+        if (!confirm('Apakah Anda yakin ingin menghapus data petugas ini?')) return;
+        const stmt = DB.prepare("DELETE FROM petugas WHERE id = ?");
+        stmt.execute([id]);
+        toast('Data petugas berhasil dihapus (Prepared Statement)');
+        render();
+      }
+
+      render();
+    }
+  </script>
+</body>
+</html>

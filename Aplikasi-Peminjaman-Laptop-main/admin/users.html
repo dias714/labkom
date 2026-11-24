@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Data User - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/validator.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['admin']);
+    if (user) {
+      layout('Data User', 'admin', 'Data User');
+      document.getElementById('content').innerHTML = `
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Data User & Akun Login</h2>
+            <p class="text-sm text-slate-500">Kelola kredensial akses seluruh pengguna sistem dengan Prepared Statement.</p>
+          </div>
+          <button onclick="openForm()" class="btn-primary">
+            <i data-lucide="plus"></i> Tambah User
+          </button>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+          <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+              <input id="search" class="input pl-9" placeholder="Cari username, nama, atau role...">
+            </div>
+            <select id="filterRole" class="input sm:max-w-44">
+              <option value="Semua">Semua Role</option>
+              <option value="admin">Admin</option>
+              <option value="petugas">Petugas</option>
+              <option value="siswa">Siswa</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 text-slate-500">
+                <tr>
+                  <th class="text-left px-4 py-3">Username</th>
+                  <th class="text-left px-4 py-3">Nama Lengkap</th>
+                  <th class="text-left px-4 py-3">Role Hak Akses</th>
+                  <th class="text-left px-4 py-3">Password Terenkripsi</th>
+                  <th class="px-4 py-3 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      lucide.createIcons();
+
+      const render = () => {
+        const data = DB.get('users');
+        const q = document.getElementById('search').value.toLowerCase();
+        const fRole = document.getElementById('filterRole').value;
+
+        const filtered = data.filter(x => {
+          const matchR = fRole === 'Semua' || x.role === fRole;
+          const matchQ = JSON.stringify(x).toLowerCase().includes(q);
+          return matchR && matchQ;
+        });
+
+        document.getElementById('rows').innerHTML = filtered.map(x => `
+          <tr class="border-t border-slate-100 hover:bg-slate-50">
+            <td class="px-4 py-3 font-semibold text-slate-800 font-mono text-xs">@${esc(x.username)}</td>
+            <td class="px-4 py-3 font-medium">${esc(x.name)}</td>
+            <td class="px-4 py-3">
+              <span class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${x.role === 'admin' ? 'bg-purple-100 text-purple-800' : x.role === 'petugas' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'} capitalize">
+                ${esc(x.role)}
+              </span>
+            </td>
+            <td class="px-4 py-3 text-xs text-slate-400 font-mono tracking-wider">•••••••• <span class="text-[10px] text-slate-400">(Tersimpan aman)</span></td>
+            <td class="px-4 py-3 text-right whitespace-nowrap">
+              <button class="icon-btn" title="Lihat detail" onclick="openDetail(${x.id})"><i data-lucide="eye"></i></button>
+              <button class="icon-btn text-teal-600" title="Edit" onclick="openForm(${x.id})"><i data-lucide="pencil"></i></button>
+              <button class="icon-btn text-red-600" title="Hapus" onclick="removeData(${x.id})"><i data-lucide="trash-2"></i></button>
+            </td>
+          </tr>
+        `).join('') || `<tr><td colspan="5" class="text-center py-8 text-slate-400">Tidak ada data user yang sesuai.</td></tr>`;
+
+        lucide.createIcons();
+      };
+
+      document.getElementById('search').addEventListener('input', render);
+      document.getElementById('filterRole').addEventListener('change', render);
+
+      const userValidationSchema = (id = null) => ({
+        username: [
+          Validator.rules.required('Username wajib diisi'),
+          Validator.rules.username('Username 3-20 karakter alfanumerik / underscore'),
+          Validator.rules.unique('users', 'username', id, 'Username sudah digunakan')
+        ],
+        name: [
+          Validator.rules.required('Nama lengkap wajib diisi'),
+          Validator.rules.minLength(3, 'Nama minimal 3 karakter')
+        ],
+        role: [Validator.rules.inList(['admin', 'petugas', 'siswa'], 'Role tidak valid')],
+        password: [
+          Validator.rules.required('Password wajib diisi'),
+          Validator.rules.minLength(6, 'Password minimal 6 karakter')
+        ]
+      });
+
+      function openForm(id = null) {
+        const data = DB.get('users');
+        const item = id ? data.find(x => x.id === id) : {};
+        const isEdit = !!id;
+
+        modal(
+          isEdit ? 'Edit Data User' : 'Tambah User Baru',
+          `
+          <form id="dataForm" class="grid sm:grid-cols-2 gap-4" novalidate>
+            <div>
+              <label class="label">Username Akun <span class="text-red-500">*</span></label>
+              <input class="input" name="username" id="username" placeholder="Contoh: hendra_admin" value="${esc(item.username || '')}" required>
+            </div>
+            <div>
+              <label class="label">Nama Lengkap <span class="text-red-500">*</span></label>
+              <input class="input" name="name" id="name" placeholder="Contoh: Hendra Gunawan" value="${esc(item.name || '')}" required>
+            </div>
+            <div>
+              <label class="label">Role Akses <span class="text-red-500">*</span></label>
+              <select class="input" name="role" id="role" required>
+                <option value="admin" ${item.role === 'admin' ? 'selected' : ''}>Administrator</option>
+                <option value="petugas" ${item.role === 'petugas' ? 'selected' : ''}>Petugas / Laboran</option>
+                <option value="siswa" ${item.role === 'siswa' ? 'selected' : ''}>Siswa Peminjam</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Password <span class="text-red-500">*</span></label>
+              <input class="input" type="password" name="password" id="password" placeholder="Minimal 6 karakter" value="${esc(item.password || '')}" required>
+            </div>
+          </form>
+          `,
+          `
+          <button onclick="closeModal()" class="btn-secondary">Batal</button>
+          <button onclick="saveData(${id || 'null'})" class="btn-primary">
+            <i data-lucide="shield-check"></i> Simpan (Prepared)
+          </button>
+          `
+        );
+
+        const form = document.getElementById('dataForm');
+        const schema = userValidationSchema(id);
+        Validator.attach(form, schema);
+        lucide.createIcons();
+      }
+
+      function saveData(id) {
+        const form = document.getElementById('dataForm');
+        const schema = userValidationSchema(id);
+
+        if (!Validator.validateForm(form, schema)) return;
+
+        const formData = new FormData(form);
+        const obj = Object.fromEntries(formData);
+
+        if (id) {
+          const stmt = DB.prepare("UPDATE users SET username = :username, name = :name, role = :role, password = :password WHERE id = :id");
+          stmt.execute({ ...obj, id: id });
+          toast('Data user berhasil diperbarui (Prepared Statement)');
+        } else {
+          const stmt = DB.prepare("INSERT INTO users (username, name, role, password) VALUES (:username, :name, :role, :password)");
+          stmt.execute(obj);
+          toast('User baru berhasil ditambahkan (Prepared Statement)');
+        }
+
+        closeModal();
+        render();
+      }
+
+      function openDetail(id) {
+        const data = DB.get('users');
+        const x = data.find(a => a.id === id);
+        if (!x) return;
+
+        modal(
+          'Detail User',
+          `
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div><p class="text-xs text-slate-400">Username</p><p class="font-semibold mt-1 text-slate-800">@${esc(x.username)}</p></div>
+            <div><p class="text-xs text-slate-400">Nama Lengkap</p><p class="font-semibold mt-1 text-slate-800">${esc(x.name)}</p></div>
+            <div><p class="text-xs text-slate-400">Role Hak Akses</p><p class="font-semibold mt-1 capitalize text-slate-800">${esc(x.role)}</p></div>
+            <div><p class="text-xs text-slate-400">Keamanan Kredensial</p><p class="font-semibold mt-1 text-slate-800 text-xs text-emerald-600 flex items-center gap-1"><i data-lucide="lock" class="w-3.5 h-3.5"></i> Password tersimpan & tervalidasi</p></div>
+          </div>
+          `,
+          `<button onclick="closeModal()" class="btn-secondary">Tutup</button>`
+        );
+      }
+
+      function removeData(id) {
+        const data = DB.get('users');
+        const x = data.find(u => u.id === id);
+        if (x && x.id === user.id) {
+          toast('Tidak dapat menghapus akun yang sedang Anda gunakan!', 'error');
+          return;
+        }
+
+        if (!confirm('Apakah Anda yakin ingin menghapus user ini?')) return;
+        const stmt = DB.prepare("DELETE FROM users WHERE id = ?");
+        stmt.execute([id]);
+        toast('User berhasil dihapus (Prepared Statement)');
+        render();
+      }
+
+      render();
+    }
+  </script>
+</body>
+</html>

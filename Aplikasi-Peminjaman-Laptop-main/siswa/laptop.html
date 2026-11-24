@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Katalog Laptop - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/validator.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['siswa']);
+    if (user) {
+      layout('Katalog Laptop', 'siswa', 'Laptop');
+      document.getElementById('content').innerHTML = `
+        <div class="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Katalog Laptop Sekolah</h2>
+            <p class="text-sm text-slate-500">Pilih unit laptop yang berstatus tersedia untuk diajukan.</p>
+          </div>
+          <div class="relative w-full sm:w-72">
+            <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+            <input id="search" class="input pl-9" placeholder="Cari merk, prosesor, RAM, atau lokasi...">
+          </div>
+        </div>
+        <div class="grid sm:grid-cols-2 xl:grid-cols-3 gap-5" id="cards"></div>
+      `;
+      lucide.createIcons();
+
+      function render() {
+        const l = DB.get('laptops');
+        const q = (document.getElementById('search')?.value || '').toLowerCase();
+        const filtered = l.filter(x => [x.name, x.code, x.brand, x.model, x.processor, x.ram, x.storage, x.status].join(' ').toLowerCase().includes(q));
+
+        document.getElementById('cards').innerHTML = filtered.map(x => `
+          <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-start">
+                <div class="h-12 w-12 rounded-2xl bg-teal-50 text-teal-700 grid place-items-center">
+                  <i data-lucide="laptop" class="w-6 h-6"></i>
+                </div>
+                ${badge(x.status)}
+              </div>
+              <h3 class="font-bold text-lg text-slate-900 mt-4">${esc(x.name)}</h3>
+              <p class="text-xs text-slate-500 font-mono">${esc(x.code)} • ${esc(x.brand)} ${esc(x.model)}</p>
+              <div class="mt-4 p-3.5 bg-slate-50 rounded-2xl text-xs text-slate-600 space-y-1">
+                <p><b>Prosesor:</b> ${esc(x.processor)}</p>
+                <p><b>Memori:</b> RAM ${esc(x.ram)} • Storage ${esc(x.storage)}</p>
+                <p><b>Kondisi:</b> <span class="font-semibold text-emerald-700">${esc(x.condition)}</span></p>
+                <p class="text-slate-400">Lokasi Unit: ${esc(x.location)}</p>
+              </div>
+            </div>
+            <div class="mt-5">
+              ${x.status === 'Tersedia' ? `
+                <button onclick="request(${x.id})" class="btn-primary w-full py-2.5">
+                  <i data-lucide="send" class="w-4 h-4"></i> Ajukan Peminjaman
+                </button>
+              ` : `
+                <button disabled class="btn-secondary w-full py-2.5 opacity-60 cursor-not-allowed">
+                  Unit ${esc(x.status)}
+                </button>
+              `}
+            </div>
+          </div>
+        `).join('') || '<div class="col-span-3 bg-white border rounded-2xl p-8 text-center text-slate-400">Tidak ada laptop yang cocok dengan pencarian Anda.</div>';
+
+        lucide.createIcons();
+      }
+
+      window.request = function(id) {
+        location.href = 'peminjaman.html?laptop=' + id;
+      };
+
+      document.getElementById('search')?.addEventListener('input', render);
+      render();
+    }
+  </script>
+</body>
+</html>

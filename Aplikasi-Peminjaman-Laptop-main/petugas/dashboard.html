@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Dashboard - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/validator.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['petugas']);
+    if (user) {
+      layout('Dashboard Petugas', 'petugas', 'Dashboard');
+      document.getElementById('content').innerHTML = `
+        <div class="mb-6">
+          <p class="text-slate-500 text-sm">Selamat datang, <b>${esc(user.name)}</b>. Ringkasan operasional laboratorium hari ini.</p>
+          <h2 class="text-2xl font-bold text-slate-900 mt-1">Dashboard Petugas</h2>
+        </div>
+        <div id="stats" class="grid sm:grid-cols-2 xl:grid-cols-4 gap-4"></div>
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 mt-5 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold text-slate-800">Permintaan Menunggu Persetujuan</h3>
+            <span class="text-xs text-slate-400">Tinjau cepat dari dashboard</span>
+          </div>
+          <div id="pending" class="space-y-3"></div>
+        </div>
+      `;
+      lucide.createIcons();
+
+      function render() {
+        const l = DB.get('laptops');
+        const p = DB.get('peminjaman');
+        const st = DB.get('siswa');
+        const today = new Date().toISOString().slice(0, 10);
+
+        document.getElementById('stats').innerHTML = [
+          statCard('Laptop Tersedia', l.filter(x => x.status === 'Tersedia').length, 'laptop'),
+          statCard('Laptop Dipinjam', l.filter(x => x.status === 'Dipinjam').length, 'clock-3'),
+          statCard('Menunggu Persetujuan', p.filter(x => x.status === 'Menunggu').length, 'hourglass'),
+          statCard('Pengembalian Hari Ini', p.filter(x => x.returnedDate === today).length, 'rotate-ccw')
+        ].join('');
+
+        const pendingLoans = p.filter(x => x.status === 'Menunggu');
+        document.getElementById('pending').innerHTML = pendingLoans.map(x => {
+          const s = st.find(s => s.id == x.studentId);
+          const lap = l.find(lp => lp.id == x.laptopId);
+          return `
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition">
+              <div>
+                <p class="font-semibold text-slate-800">${esc(s?.name || '-')} • <span class="font-mono text-xs text-slate-500">${esc(x.code)}</span></p>
+                <p class="text-sm text-slate-600 mt-0.5">${esc(lap?.name || '-')} [${esc(lap?.code || '-')}] - <i>"${esc(x.purpose)}"</i></p>
+                <p class="text-xs text-slate-400 mt-1">Diajukan: ${formatDate(x.requestDate)} | Rencana kembali: ${formatDate(x.returnPlan)}</p>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <button onclick="decision(${x.id}, 'Ditolak')" class="btn-danger text-xs py-2 px-3">Tolak</button>
+                <button onclick="decision(${x.id}, 'Disetujui')" class="btn-success text-xs py-2 px-3">Setujui (Prepared)</button>
+              </div>
+            </div>
+          `;
+        }).join('') || '<p class="text-sm text-slate-400 text-center py-6">Tidak ada permintaan menunggu saat ini.</p>';
+
+        lucide.createIcons();
+      }
+
+      window.decision = function(id, status) {
+        const a = DB.get('peminjaman');
+        const ls = DB.get('laptops');
+        const x = a.find(z => z.id === id);
+        if (!x) return;
+
+        if (status === 'Disetujui') {
+          const lap = ls.find(z => z.id === x.laptopId);
+          if (!lap || lap.status !== 'Tersedia') {
+            toast('Laptop tidak tersedia atau sedang dipinjam!', 'error');
+            return;
+          }
+
+          DB.beginTransaction();
+          try {
+            const stmtLap = DB.prepare("UPDATE laptops SET status = ? WHERE id = ?");
+            stmtLap.execute(['Dipinjam', x.laptopId]);
+
+            const stmtLoan = DB.prepare("UPDATE peminjaman SET status = ?, borrowDate = ? WHERE id = ?");
+            stmtLoan.execute(['Dipinjam', new Date().toISOString().slice(0, 10), id]);
+
+            DB.commit();
+            toast('Peminjaman disetujui (Prepared Statement)');
+            render();
+          } catch (e) {
+            DB.rollback();
+            toast('Gagal: ' + e.message, 'error');
+          }
+        } else {
+          const stmtLoan = DB.prepare("UPDATE peminjaman SET status = ?, note = ? WHERE id = ?");
+          stmtLoan.execute(['Ditolak', 'Ditolak oleh petugas lab', id]);
+          toast('Peminjaman ditolak');
+          render();
+        }
+      };
+
+      render();
+    }
+  </script>
+</body>
+</html>

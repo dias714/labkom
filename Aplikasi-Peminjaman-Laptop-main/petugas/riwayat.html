@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Riwayat - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/validator.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['petugas']);
+    if (user) {
+      layout('Riwayat Peminjaman', 'petugas', 'Riwayat');
+      document.getElementById('content').innerHTML = `
+        <div class="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Riwayat Transaksi Peminjaman</h2>
+            <p class="text-sm text-slate-500">Seluruh catatan transaksi peminjaman dan pengembalian perangkat.</p>
+          </div>
+          <div class="relative w-full sm:w-64">
+            <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+            <input id="search" class="input pl-9" placeholder="Cari kode, siswa, atau laptop...">
+          </div>
+        </div>
+        <div id="list" class="space-y-3"></div>
+      `;
+      lucide.createIcons();
+
+      function render() {
+        const p = DB.get('peminjaman');
+        const s = DB.get('siswa');
+        const l = DB.get('laptops');
+        const returns = DB.get('pengembalian');
+        const q = (document.getElementById('search')?.value || '').toLowerCase();
+
+        const filtered = p.slice().reverse().filter(x => {
+          const st = s.find(a => a.id == x.studentId);
+          const lp = l.find(a => a.id == x.laptopId);
+          return [x.code, st?.name, lp?.name, x.status].join(' ').toLowerCase().includes(q);
+        });
+
+        document.getElementById('list').innerHTML = filtered.map(x => {
+          const st = s.find(a => a.id == x.studentId);
+          const lp = l.find(a => a.id == x.laptopId);
+          const ret = returns.find(r => r.peminjamanId == x.id);
+
+          return `
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-slate-800">${esc(x.code)}</span>
+                    <span class="text-xs text-slate-400 font-medium">• ${esc(st?.name || '-')} (${esc(st?.nis || '-')})</span>
+                  </div>
+                  <p class="text-sm text-slate-600 mt-1">${esc(lp?.name || '-')} [${esc(lp?.code || '-')}] • Diajukan: ${formatDate(x.requestDate)}</p>
+                  <p class="text-xs text-slate-400 mt-0.5">Keperluan: "${esc(x.purpose)}"</p>
+                  ${ret ? `
+                    <div class="mt-2 text-xs bg-slate-50 p-2 rounded-lg border border-slate-100 flex flex-wrap gap-3">
+                      <span>Tgl Kembali: <b>${formatDate(ret.returnedDate)}</b></span>
+                      <span>Kondisi Akhir: <b>${esc(ret.condition)}</b></span>
+                      ${ret.penalty ? `<span class="text-red-600">Denda: Rp ${Number(ret.penalty).toLocaleString('id-ID')}</span>` : ''}
+                      <span>Penerima: ${esc(ret.officerName || '-')}</span>
+                    </div>
+                  ` : ''}
+                </div>
+                <div>${badge(x.status)}</div>
+              </div>
+            </div>
+          `;
+        }).join('') || '<div class="bg-white border rounded-2xl p-8 text-center text-slate-400">Tidak ada riwayat peminjaman.</div>';
+
+        lucide.createIcons();
+      }
+
+      document.getElementById('search')?.addEventListener('input', render);
+      render();
+    }
+  </script>
+</body>
+</html>

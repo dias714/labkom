@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Data Laptop - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/validator.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['admin']);
+    if (user) {
+      layout('Data Laptop', 'admin', 'Data Laptop');
+      document.getElementById('content').innerHTML = `
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Data Laptop</h2>
+            <p class="text-sm text-slate-500">Kelola inventaris dan kondisi laptop sekolah dengan Prepared Statement.</p>
+          </div>
+          <button onclick="openForm()" class="btn-primary">
+            <i data-lucide="plus"></i> Tambah Laptop
+          </button>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+          <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+              <input id="search" class="input pl-9" placeholder="Cari kode, merk, model, processor, atau lokasi...">
+            </div>
+            <select id="filterStatus" class="input sm:max-w-48">
+              <option value="Semua">Semua Status</option>
+              <option value="Tersedia">Tersedia</option>
+              <option value="Dipinjam">Dipinjam</option>
+              <option value="Maintenance">Maintenance</option>
+              <option value="Rusak">Rusak</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 text-slate-500">
+                <tr>
+                  <th class="text-left px-4 py-3">Kode</th>
+                  <th class="text-left px-4 py-3">Nama Unit</th>
+                  <th class="text-left px-4 py-3">Merk & Model</th>
+                  <th class="text-left px-4 py-3">Spesifikasi</th>
+                  <th class="text-left px-4 py-3">Status</th>
+                  <th class="text-left px-4 py-3">Kondisi</th>
+                  <th class="text-left px-4 py-3">Lokasi</th>
+                  <th class="px-4 py-3 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      lucide.createIcons();
+
+      const render = () => {
+        const data = DB.get('laptops');
+        const q = document.getElementById('search').value.toLowerCase();
+        const fStatus = document.getElementById('filterStatus').value;
+
+        const filtered = data.filter(x => {
+          const matchStatus = fStatus === 'Semua' || x.status === fStatus;
+          const matchSearch = JSON.stringify(x).toLowerCase().includes(q);
+          return matchStatus && matchSearch;
+        });
+
+        document.getElementById('rows').innerHTML = filtered.map(x => `
+          <tr class="border-t border-slate-100 hover:bg-slate-50">
+            <td class="px-4 py-3 font-semibold text-slate-800">${esc(x.code)}</td>
+            <td class="px-4 py-3">${esc(x.name)}</td>
+            <td class="px-4 py-3">${esc(x.brand)} <span class="text-slate-400 text-xs">${esc(x.model)}</span></td>
+            <td class="px-4 py-3 text-xs text-slate-600">${esc(x.processor)} • ${esc(x.ram)} • ${esc(x.storage)}</td>
+            <td class="px-4 py-3">${badge(x.status)}</td>
+            <td class="px-4 py-3 text-xs"><span class="px-2 py-0.5 rounded bg-slate-100 font-medium">${esc(x.condition)}</span></td>
+            <td class="px-4 py-3 text-xs text-slate-500">${esc(x.location)}</td>
+            <td class="px-4 py-3 text-right whitespace-nowrap">
+              <button class="icon-btn" title="Lihat detail" onclick="openDetail(${x.id})"><i data-lucide="eye"></i></button>
+              <button class="icon-btn text-teal-600" title="Edit" onclick="openForm(${x.id})"><i data-lucide="pencil"></i></button>
+              <button class="icon-btn text-red-600" title="Hapus" onclick="removeData(${x.id})"><i data-lucide="trash-2"></i></button>
+            </td>
+          </tr>
+        `).join('') || `<tr><td colspan="8" class="text-center py-8 text-slate-400">Tidak ada data laptop yang ditemukan.</td></tr>`;
+
+        lucide.createIcons();
+      };
+
+      document.getElementById('search').addEventListener('input', render);
+      document.getElementById('filterStatus').addEventListener('change', render);
+
+      const laptopValidationSchema = (id = null) => ({
+        code: [
+          Validator.rules.required('Kode laptop wajib diisi'),
+          Validator.rules.unique('laptops', 'code', id, 'Kode laptop sudah digunakan')
+        ],
+        name: [
+          Validator.rules.required('Nama unit laptop wajib diisi'),
+          Validator.rules.minLength(3, 'Nama unit minimal 3 karakter')
+        ],
+        brand: [Validator.rules.required('Merk laptop wajib diisi')],
+        model: [Validator.rules.required('Model/tipe laptop wajib diisi')],
+        processor: [Validator.rules.required('Prosesor wajib diisi')],
+        ram: [Validator.rules.required('RAM wajib diisi')],
+        storage: [Validator.rules.required('Kapasitas penyimpanan wajib diisi')],
+        status: [Validator.rules.inList(['Tersedia', 'Dipinjam', 'Maintenance', 'Rusak'], 'Status tidak valid')],
+        condition: [Validator.rules.inList(['Baik', 'Rusak Ringan', 'Rusak Berat', 'Perlu diperiksa'], 'Kondisi tidak valid')],
+        location: [Validator.rules.required('Lokasi penyimpanan wajib diisi')]
+      });
+
+      function openForm(id = null) {
+        const data = DB.get('laptops');
+        const item = id ? data.find(x => x.id === id) : {};
+        const isEdit = !!id;
+
+        modal(
+          isEdit ? 'Edit Data Laptop' : 'Tambah Laptop Baru',
+          `
+          <form id="dataForm" class="grid sm:grid-cols-2 gap-4" novalidate>
+            <div>
+              <label class="label">Kode Laptop <span class="text-red-500">*</span></label>
+              <input class="input" name="code" id="code" placeholder="Contoh: LT011" value="${esc(item.code || '')}" required>
+            </div>
+            <div>
+              <label class="label">Nama Unit <span class="text-red-500">*</span></label>
+              <input class="input" name="name" id="name" placeholder="Contoh: Laptop 11" value="${esc(item.name || '')}" required>
+            </div>
+            <div>
+              <label class="label">Merk <span class="text-red-500">*</span></label>
+              <input class="input" name="brand" id="brand" placeholder="Contoh: Lenovo, ASUS, HP" value="${esc(item.brand || '')}" required>
+            </div>
+            <div>
+              <label class="label">Model / Seri <span class="text-red-500">*</span></label>
+              <input class="input" name="model" id="model" placeholder="Contoh: ThinkPad L14" value="${esc(item.model || '')}" required>
+            </div>
+            <div>
+              <label class="label">Processor <span class="text-red-500">*</span></label>
+              <input class="input" name="processor" id="processor" placeholder="Contoh: Core i5 / Ryzen 5" value="${esc(item.processor || '')}" required>
+            </div>
+            <div>
+              <label class="label">RAM <span class="text-red-500">*</span></label>
+              <input class="input" name="ram" id="ram" placeholder="Contoh: 8 GB / 16 GB" value="${esc(item.ram || '')}" required>
+            </div>
+            <div>
+              <label class="label">Storage <span class="text-red-500">*</span></label>
+              <input class="input" name="storage" id="storage" placeholder="Contoh: 256 GB SSD" value="${esc(item.storage || '')}" required>
+            </div>
+            <div>
+              <label class="label">Lokasi <span class="text-red-500">*</span></label>
+              <input class="input" name="location" id="location" placeholder="Contoh: Lab RPL" value="${esc(item.location || 'Lab RPL')}" required>
+            </div>
+            <div>
+              <label class="label">Status Ketersediaan <span class="text-red-500">*</span></label>
+              <select class="input" name="status" id="status" required>
+                <option value="Tersedia" ${item.status === 'Tersedia' ? 'selected' : ''}>Tersedia</option>
+                <option value="Dipinjam" ${item.status === 'Dipinjam' ? 'selected' : ''}>Dipinjam</option>
+                <option value="Maintenance" ${item.status === 'Maintenance' ? 'selected' : ''}>Maintenance</option>
+                <option value="Rusak" ${item.status === 'Rusak' ? 'selected' : ''}>Rusak</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Kondisi Fisik <span class="text-red-500">*</span></label>
+              <select class="input" name="condition" id="condition" required>
+                <option value="Baik" ${item.condition === 'Baik' ? 'selected' : ''}>Baik</option>
+                <option value="Rusak Ringan" ${item.condition === 'Rusak Ringan' ? 'selected' : ''}>Rusak Ringan</option>
+                <option value="Rusak Berat" ${item.condition === 'Rusak Berat' ? 'selected' : ''}>Rusak Berat</option>
+                <option value="Perlu diperiksa" ${item.condition === 'Perlu diperiksa' ? 'selected' : ''}>Perlu diperiksa</option>
+              </select>
+            </div>
+          </form>
+          `,
+          `
+          <button onclick="closeModal()" class="btn-secondary">Batal</button>
+          <button onclick="saveData(${id || 'null'})" class="btn-primary">
+            <i data-lucide="shield-check"></i> Simpan (Prepared)
+          </button>
+          `
+        );
+
+        const form = document.getElementById('dataForm');
+        const schema = laptopValidationSchema(id);
+        Validator.attach(form, schema);
+        lucide.createIcons();
+      }
+
+      function saveData(id) {
+        const form = document.getElementById('dataForm');
+        const schema = laptopValidationSchema(id);
+
+        if (!Validator.validateForm(form, schema)) {
+          return;
+        }
+
+        const formData = new FormData(form);
+        const obj = Object.fromEntries(formData);
+
+        // Eksekusi CRUD dengan PREPARED STATEMENT
+        if (id) {
+          const stmt = DB.prepare(`
+            UPDATE laptops 
+            SET code = :code, name = :name, brand = :brand, model = :model, processor = :processor, 
+                ram = :ram, storage = :storage, status = :status, condition = :condition, location = :location 
+            WHERE id = :id
+          `);
+          stmt.execute({ ...obj, id: id });
+          toast('Data laptop berhasil diperbarui (Prepared Statement)');
+        } else {
+          const stmt = DB.prepare(`
+            INSERT INTO laptops (code, name, brand, model, processor, ram, storage, status, condition, location) 
+            VALUES (:code, :name, :brand, :model, :processor, :ram, :storage, :status, :condition, :location)
+          `);
+          stmt.execute(obj);
+          toast('Data laptop baru berhasil disimpan (Prepared Statement)');
+        }
+
+        closeModal();
+        render();
+      }
+
+      function openDetail(id) {
+        const data = DB.get('laptops');
+        const x = data.find(a => a.id === id);
+        if (!x) return;
+
+        modal(
+          'Detail Laptop',
+          `
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div><p class="text-xs text-slate-400">Kode Laptop</p><p class="font-semibold mt-1 text-slate-800">${esc(x.code)}</p></div>
+            <div><p class="text-xs text-slate-400">Nama Unit</p><p class="font-semibold mt-1 text-slate-800">${esc(x.name)}</p></div>
+            <div><p class="text-xs text-slate-400">Merk</p><p class="font-semibold mt-1 text-slate-800">${esc(x.brand)}</p></div>
+            <div><p class="text-xs text-slate-400">Model / Seri</p><p class="font-semibold mt-1 text-slate-800">${esc(x.model)}</p></div>
+            <div><p class="text-xs text-slate-400">Processor</p><p class="font-semibold mt-1 text-slate-800">${esc(x.processor)}</p></div>
+            <div><p class="text-xs text-slate-400">RAM</p><p class="font-semibold mt-1 text-slate-800">${esc(x.ram)}</p></div>
+            <div><p class="text-xs text-slate-400">Storage</p><p class="font-semibold mt-1 text-slate-800">${esc(x.storage)}</p></div>
+            <div><p class="text-xs text-slate-400">Lokasi</p><p class="font-semibold mt-1 text-slate-800">${esc(x.location)}</p></div>
+            <div><p class="text-xs text-slate-400">Status</p><p class="mt-1">${badge(x.status)}</p></div>
+            <div><p class="text-xs text-slate-400">Kondisi</p><p class="font-semibold mt-1 text-slate-800">${esc(x.condition)}</p></div>
+          </div>
+          `,
+          `<button onclick="closeModal()" class="btn-secondary">Tutup</button>`
+        );
+      }
+
+      function removeData(id) {
+        if (!confirm('Apakah Anda yakin ingin menghapus data laptop ini?')) return;
+        // Hapus dengan PREPARED STATEMENT
+        const stmt = DB.prepare("DELETE FROM laptops WHERE id = ?");
+        stmt.execute([id]);
+        toast('Data laptop berhasil dihapus (Prepared Statement)');
+        render();
+      }
+
+      render();
+    }
+  </script>
+</body>
+</html>

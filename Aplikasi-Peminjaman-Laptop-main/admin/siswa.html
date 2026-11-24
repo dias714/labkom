@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Data Siswa - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/validator.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['admin']);
+    if (user) {
+      layout('Data Siswa', 'admin', 'Data Siswa');
+
+      // State Aplikasi untuk Search & Pagination
+      let currentPage = 1;
+      let pageSize = 5;
+      let currentPhotoBase64 = '';
+
+      document.getElementById('content').innerHTML = `
+        <!-- Flash Message Banner -->
+        <div id="flashBanner" class="hidden mb-5 p-4 rounded-2xl flex items-center justify-between border transition-all duration-300">
+          <div class="flex items-center gap-3">
+            <div id="flashIcon" class="w-8 h-8 rounded-xl grid place-items-center shrink-0"></div>
+            <div>
+              <p id="flashTitle" class="font-bold text-sm"></p>
+              <p id="flashMessage" class="text-xs mt-0.5"></p>
+            </div>
+          </div>
+          <button onclick="dismissFlash()" class="icon-btn text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Data Siswa</h2>
+            <p class="text-sm text-slate-500">Kelola master data siswa, akun login, dan foto profil dengan Prepared Statement.</p>
+          </div>
+          <button onclick="openForm()" class="btn-primary">
+            <i data-lucide="user-plus"></i> Tambah Siswa
+          </button>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+          <!-- Search & Filter Bar -->
+          <div class="p-4 md:p-5 border-b border-slate-100 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="absolute left-3.5 top-3 w-4 h-4 text-slate-400"></i>
+              <input id="search" class="input pl-10 pr-9" placeholder="Cari berdasarkan NIS, nama siswa, kelas, jurusan, atau username...">
+              <button id="clearSearch" onclick="clearSearchInput()" class="hidden absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
+                <i data-lucide="circle-x" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <div class="flex flex-wrap sm:flex-nowrap gap-2.5">
+              <select id="filterJurusan" class="input sm:w-40 text-xs">
+                <option value="Semua">Semua Jurusan</option>
+                <option value="RPL">RPL</option>
+                <option value="TKJ">TKJ</option>
+                <option value="DKV">DKV</option>
+              </select>
+              <select id="filterStatus" class="input sm:w-36 text-xs">
+                <option value="Semua">Semua Status</option>
+                <option value="Aktif">Aktif</option>
+                <option value="Nonaktif">Nonaktif</option>
+              </select>
+              <select id="pageSizeSelect" class="input sm:w-28 text-xs">
+                <option value="5" selected>5 / hal</option>
+                <option value="10">10 / hal</option>
+                <option value="20">20 / hal</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Table Data Siswa -->
+          <div class="table-wrap">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50/80 text-slate-500">
+                <tr>
+                  <th class="text-left px-4 py-3.5 w-16">Foto</th>
+                  <th class="text-left px-4 py-3.5">NIS</th>
+                  <th class="text-left px-4 py-3.5">Nama Lengkap</th>
+                  <th class="text-left px-4 py-3.5">Kelas & Jurusan</th>
+                  <th class="text-left px-4 py-3.5">Username</th>
+                  <th class="text-left px-4 py-3.5">Status</th>
+                  <th class="px-4 py-3.5 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+
+          <!-- Pagination Bar -->
+          <div class="px-5 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/50">
+            <p id="paginationInfo" class="text-xs text-slate-500 font-medium"></p>
+            <div id="paginationControls" class="flex items-center gap-1.5"></div>
+          </div>
+        </div>
+      `;
+      lucide.createIcons();
+
+      // ==========================================
+      // FLASH MESSAGE SYSTEM
+      // ==========================================
+      window.showFlash = function(title, message, type = 'success') {
+        const banner = document.getElementById('flashBanner');
+        const iconContainer = document.getElementById('flashIcon');
+        const titleEl = document.getElementById('flashTitle');
+        const msgEl = document.getElementById('flashMessage');
+        if (!banner) return;
+
+        const styleMap = {
+          success: {
+            bg: 'bg-emerald-50 border-emerald-200 text-emerald-900',
+            iconBg: 'bg-emerald-600 text-white',
+            icon: 'check-circle'
+          },
+          error: {
+            bg: 'bg-rose-50 border-rose-200 text-rose-900',
+            iconBg: 'bg-rose-600 text-white',
+            icon: 'alert-triangle'
+          },
+          warning: {
+            bg: 'bg-amber-50 border-amber-200 text-amber-900',
+            iconBg: 'bg-amber-500 text-white',
+            icon: 'alert-circle'
+          },
+          info: {
+            bg: 'bg-blue-50 border-blue-200 text-blue-900',
+            iconBg: 'bg-blue-600 text-white',
+            icon: 'info'
+          }
+        };
+
+        const config = styleMap[type] || styleMap.success;
+        banner.className = `mb-5 p-4 rounded-2xl flex items-center justify-between border transition-all duration-300 ${config.bg}`;
+        iconContainer.className = `w-8 h-8 rounded-xl grid place-items-center shrink-0 ${config.iconBg}`;
+        iconContainer.innerHTML = `<i data-lucide="${config.icon}" class="w-4 h-4"></i>`;
+        titleEl.textContent = title;
+        msgEl.textContent = message;
+
+        banner.classList.remove('hidden');
+        lucide.createIcons();
+
+        // Juga tampilkan toast floating
+        toast(`${title}: ${message}`, type);
+
+        // Auto hide flash banner setelah 4 detik
+        clearTimeout(window._flashTimer);
+        window._flashTimer = setTimeout(() => {
+          dismissFlash();
+        }, 4500);
+      };
+
+      window.dismissFlash = function() {
+        const banner = document.getElementById('flashBanner');
+        if (banner) banner.classList.add('hidden');
+      };
+
+      // ==========================================
+      // SEARCH & FILTER LOGIC
+      // ==========================================
+      window.clearSearchInput = function() {
+        const input = document.getElementById('search');
+        input.value = '';
+        currentPage = 1;
+        document.getElementById('clearSearch').classList.add('hidden');
+        render();
+      };
+
+      const getFilteredData = () => {
+        const data = DB.get('siswa', []);
+        const q = (document.getElementById('search')?.value || '').trim().toLowerCase();
+        const fJurusan = document.getElementById('filterJurusan')?.value || 'Semua';
+        const fStatus = document.getElementById('filterStatus')?.value || 'Semua';
+
+        const clearBtn = document.getElementById('clearSearch');
+        if (clearBtn) {
+          clearBtn.classList.toggle('hidden', q.length === 0);
+        }
+
+        return data.filter(x => {
+          const matchJ = fJurusan === 'Semua' || x.jurusan === fJurusan;
+          const matchS = fStatus === 'Semua' || x.status === fStatus;
+          const matchQ = [x.nis, x.name, x.kelas, x.jurusan, x.username].join(' ').toLowerCase().includes(q);
+          return matchJ && matchS && matchQ;
+        });
+      };
+
+      // ==========================================
+      // RENDER FUNCTION (Table, Search & Pagination)
+      // ==========================================
+      const render = () => {
+        const filtered = getFilteredData();
+        const total = filtered.length;
+        const totalPages = Math.ceil(total / pageSize) || 1;
+
+        if (currentPage > totalPages) currentPage = totalPages;
+        if (currentPage < 1) currentPage = 1;
+
+        const startIdx = (currentPage - 1) * pageSize;
+        const endIdx = Math.min(startIdx + pageSize, total);
+        const pagedData = filtered.slice(startIdx, endIdx);
+
+        // Render Table Rows
+        document.getElementById('rows').innerHTML = pagedData.map(x => {
+          const avatarHtml = x.photo
+            ? `<img src="${x.photo}" alt="${esc(x.name)}" class="w-10 h-10 rounded-xl object-cover ring-1 ring-slate-200">`
+            : `<div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-600 to-teal-400 text-white font-bold grid place-items-center text-sm shadow-sm">${esc(x.name.charAt(0))}</div>`;
+
+          return `
+            <tr class="border-t border-slate-100 hover:bg-slate-50/80 transition-colors">
+              <td class="px-4 py-3">${avatarHtml}</td>
+              <td class="px-4 py-3 font-semibold text-slate-800 font-mono text-xs">${esc(x.nis)}</td>
+              <td class="px-4 py-3 font-medium text-slate-800">${esc(x.name)}</td>
+              <td class="px-4 py-3">
+                <span class="font-medium text-slate-700">${esc(x.kelas)}</span>
+                <span class="ml-1.5 px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[11px] font-semibold">${esc(x.jurusan)}</span>
+              </td>
+              <td class="px-4 py-3 text-slate-600 font-mono text-xs">@${esc(x.username)}</td>
+              <td class="px-4 py-3">${badge(x.status)}</td>
+              <td class="px-4 py-3 text-right whitespace-nowrap">
+                <button class="icon-btn text-slate-500 hover:text-teal-700" title="Lihat detail lengkap" onclick="openDetail(${x.id})">
+                  <i data-lucide="eye"></i>
+                </button>
+                <button class="icon-btn text-teal-600 hover:text-teal-800" title="Edit data" onclick="openForm(${x.id})">
+                  <i data-lucide="pencil"></i>
+                </button>
+                <button class="icon-btn text-rose-600 hover:text-rose-800" title="Hapus data" onclick="confirmDelete(${x.id})">
+                  <i data-lucide="trash-2"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('') || `
+          <tr>
+            <td colspan="7" class="text-center py-12 text-slate-400">
+              <div class="max-w-xs mx-auto space-y-2">
+                <i data-lucide="search-x" class="w-8 h-8 text-slate-300 mx-auto"></i>
+                <p class="font-semibold text-slate-600">Tidak ada siswa yang ditemukan</p>
+                <p class="text-xs text-slate-400">Coba ubah kata kunci pencarian atau sesuaikan filter jurusan dan status.</p>
+                <button onclick="clearSearchInput()" class="btn-secondary text-xs py-1.5 px-3 mt-2">Reset Pencarian</button>
+              </div>
+            </td>
+          </tr>
+        `;
+
+        // Render Pagination Info & Controls
+        const allCount = DB.get('siswa', []).length;
+        document.getElementById('paginationInfo').innerHTML = total > 0
+          ? `Menampilkan <span class="font-bold text-slate-700">${startIdx + 1}</span> - <span class="font-bold text-slate-700">${endIdx}</span> dari <span class="font-bold text-slate-700">${total}</span> siswa ${total !== allCount ? `(difilter dari ${allCount})` : ''}`
+          : 'Tidak ada data untuk ditampilkan';
+
+        // Render Pagination Buttons
+        let paginationButtonsHtml = '';
+        if (totalPages > 1) {
+          paginationButtonsHtml += `
+            <button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(1)" title="Halaman Pertama">
+              <i data-lucide="chevrons-left" class="w-3.5 h-3.5"></i>
+            </button>
+            <button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})" title="Sebelumnya">
+              <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+            </button>
+          `;
+
+          // Generate nomor halaman dengan window 5 nomor
+          let startPage = Math.max(1, currentPage - 2);
+          let endPage = Math.min(totalPages, startPage + 4);
+          if (endPage - startPage < 4) {
+            startPage = Math.max(1, endPage - 4);
+          }
+
+          for (let p = startPage; p <= endPage; p++) {
+            paginationButtonsHtml += `
+              <button class="page-btn ${p === currentPage ? 'active' : ''}" onclick="goToPage(${p})">${p}</button>
+            `;
+          }
+
+          paginationButtonsHtml += `
+            <button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})" title="Selanjutnya">
+              <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+            </button>
+            <button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${totalPages})" title="Halaman Terakhir">
+              <i data-lucide="chevrons-right" class="w-3.5 h-3.5"></i>
+            </button>
+          `;
+        }
+
+        document.getElementById('paginationControls').innerHTML = paginationButtonsHtml;
+        lucide.createIcons();
+      };
+
+      window.goToPage = function(page) {
+        currentPage = page;
+        render();
+      };
+
+      document.getElementById('search')?.addEventListener('input', () => {
+        currentPage = 1;
+        render();
+      });
+
+      document.getElementById('filterJurusan')?.addEventListener('change', () => {
+        currentPage = 1;
+        render();
+      });
+
+      document.getElementById('filterStatus')?.addEventListener('change', () => {
+        currentPage = 1;
+        render();
+      });
+
+      document.getElementById('pageSizeSelect')?.addEventListener('change', (e) => {
+        pageSize = parseInt(e.target.value) || 5;
+        currentPage = 1;
+        render();
+      });
+
+      // ==========================================
+      // VALIDATION SCHEMA
+      // ==========================================
+      const siswaValidationSchema = (id = null) => {
+        // Cari user yang terkait dengan siswa yang sedang diedit
+        // agar unique('users','username') tidak memblokir username milik siswa itu sendiri
+        let excludeUserId = null;
+        if (id) {
+          const siswaItem = DB.get('siswa', []).find(x => x.id === id);
+          if (siswaItem) {
+            const relatedUser = DB.get('users', []).find(u => u.username === siswaItem.username);
+            if (relatedUser) excludeUserId = relatedUser.id;
+          }
+        }
+        return {
+          nis: [
+            Validator.rules.required('NIS wajib diisi'),
+            Validator.rules.numeric('NIS hanya boleh berisi angka'),
+            Validator.rules.minLength(4, 'NIS minimal 4 angka'),
+            Validator.rules.unique('siswa', 'nis', id, 'NIS sudah terdaftar')
+          ],
+          name: [
+            Validator.rules.required('Nama siswa wajib diisi'),
+            Validator.rules.minLength(3, 'Nama minimal 3 karakter')
+          ],
+          kelas: [Validator.rules.required('Kelas wajib diisi')],
+          jurusan: [Validator.rules.required('Jurusan wajib dipilih')],
+          username: id
+            ? [] // Saat edit: username tidak bisa diubah, skip validasi
+            : [
+                Validator.rules.required('Username wajib diisi'),
+                Validator.rules.username('Username 3-20 karakter alfanumerik / underscore'),
+                Validator.rules.unique('users', 'username', excludeUserId, 'Username sudah digunakan oleh akun lain')
+              ],
+          status: [Validator.rules.inList(['Aktif', 'Nonaktif'], 'Status tidak valid')]
+        };
+      };
+
+      // ==========================================
+      // FORM TAMBAH / EDIT DENGAN UPLOAD FOTO
+      // ==========================================
+      window.openForm = function(id = null) {
+        const data = DB.get('siswa', []);
+        const item = id ? data.find(x => x.id === id) : {};
+        const isEdit = !!id;
+        currentPhotoBase64 = item.photo || '';
+
+        modal(
+          isEdit ? 'Edit Data Siswa' : 'Tambah Siswa Baru',
+          `
+          <form id="dataForm" class="space-y-4" novalidate>
+            <!-- Komponen Upload Foto -->
+            <div>
+              <label class="label">Foto Profil Siswa</label>
+              <div class="flex items-center gap-4">
+                <div id="photoPreviewBox" class="w-20 h-20 rounded-2xl border-2 border-slate-200 overflow-hidden bg-slate-50 grid place-items-center shrink-0">
+                  ${currentPhotoBase64
+                    ? `<img src="${currentPhotoBase64}" id="photoPreviewImg" class="w-full h-full object-cover">`
+                    : `<div id="photoPlaceholder" class="text-slate-300 grid place-items-center"><i data-lucide="image" class="w-8 h-8"></i></div>`}
+                </div>
+                <div class="flex-1 space-y-1.5">
+                  <div class="flex items-center gap-2">
+                    <label for="photoFileInput" class="btn-secondary text-xs py-2 px-3 cursor-pointer">
+                      <i data-lucide="upload" class="w-3.5 h-3.5"></i> Pilih Foto
+                    </label>
+                    <button type="button" id="removePhotoBtn" onclick="removePhoto()" class="${currentPhotoBase64 ? '' : 'hidden'} btn-danger text-xs py-2 px-3">
+                      <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Foto
+                    </button>
+                    <input type="file" id="photoFileInput" accept="image/png, image/jpeg, image/jpg, image/webp" class="hidden" onchange="handlePhotoUpload(this)">
+                  </div>
+                  <p class="text-[11px] text-slate-400">Format: PNG, JPG, WEBP. Maksimal ukuran file 2 MB.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+              <div>
+                <label class="label">NIS (Nomor Induk Siswa) <span class="text-rose-500">*</span></label>
+                <input class="input" name="nis" id="nis" placeholder="Contoh: 2026006" value="${esc(item.nis || '')}" required>
+              </div>
+              <div>
+                <label class="label">Nama Lengkap Siswa <span class="text-rose-500">*</span></label>
+                <input class="input" name="name" id="name" placeholder="Contoh: Muhammad Rizki" value="${esc(item.name || '')}" required>
+              </div>
+              <div>
+                <label class="label">Kelas <span class="text-rose-500">*</span></label>
+                <input class="input" name="kelas" id="kelas" placeholder="Contoh: XII RPL 1" value="${esc(item.kelas || '')}" required>
+              </div>
+              <div>
+                <label class="label">Jurusan <span class="text-rose-500">*</span></label>
+                <select class="input" name="jurusan" id="jurusan" required>
+                  <option value="RPL" ${item.jurusan === 'RPL' ? 'selected' : ''}>Rekayasa Perangkat Lunak (RPL)</option>
+                  <option value="TKJ" ${item.jurusan === 'TKJ' ? 'selected' : ''}>Teknik Komputer & Jaringan (TKJ)</option>
+                  <option value="DKV" ${item.jurusan === 'DKV' ? 'selected' : ''}>Desain Komunikasi Visual (DKV)</option>
+                </select>
+              </div>
+              <div>
+                <label class="label">Username Login ${isEdit ? '' : '<span class="text-rose-500">*</span>'}</label>
+                ${isEdit
+                  ? `<div class="input bg-slate-50 text-slate-500 flex items-center gap-2 cursor-not-allowed select-none">
+                      <i data-lucide="lock" class="w-3.5 h-3.5 shrink-0"></i>
+                      <span class="font-mono">${esc(item.username || '')}</span>
+                      <span class="ml-auto text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">Tidak dapat diubah</span>
+                    </div>
+                    <input type="hidden" name="username" value="${esc(item.username || '')}">`
+                  : `<input class="input" name="username" id="username" placeholder="Contoh: rizki26" value="${esc(item.username || '')}" required>`
+                }
+              </div>
+              <div>
+                <label class="label">Status Keaktifan <span class="text-rose-500">*</span></label>
+                <select class="input" name="status" id="status" required>
+                  <option value="Aktif" ${item.status === 'Aktif' ? 'selected' : ''}>Aktif</option>
+                  <option value="Nonaktif" ${item.status === 'Nonaktif' ? 'selected' : ''}>Nonaktif</option>
+                </select>
+              </div>
+            </div>
+          </form>
+          `,
+          `
+          <button onclick="closeModal()" class="btn-secondary">Batal</button>
+          <button onclick="saveData(${id || 'null'})" class="btn-primary">
+            <i data-lucide="shield-check"></i> Simpan (Prepared)
+          </button>
+          `
+        );
+
+        const form = document.getElementById('dataForm');
+        const schema = siswaValidationSchema(id);
+        Validator.attach(form, schema);
+        lucide.createIcons();
+      };
+
+      // Handler Upload Foto dengan Preview
+      window.handlePhotoUpload = function(input) {
+        const file = input.files?.[0];
+        if (!file) return;
+
+        // Validasi ukuran maks 2MB
+        if (file.size > 2 * 1024 * 1024) {
+          showFlash('Upload Gagal', 'Ukuran foto maksimal 2 MB!', 'error');
+          input.value = '';
+          return;
+        }
+
+        // Validasi tipe mime
+        if (!file.type.startsWith('image/')) {
+          showFlash('Upload Gagal', 'File yang dipilih harus berupa gambar (JPG, PNG, WEBP)', 'error');
+          input.value = '';
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          currentPhotoBase64 = e.target.result;
+          const box = document.getElementById('photoPreviewBox');
+          if (box) {
+            box.innerHTML = `<img src="${currentPhotoBase64}" class="w-full h-full object-cover">`;
+          }
+          const removeBtn = document.getElementById('removePhotoBtn');
+          if (removeBtn) removeBtn.classList.remove('hidden');
+          showFlash('Foto Dipilih', 'Foto berhasil dimuat dan siap disimpan.', 'info');
+        };
+        reader.readAsDataURL(file);
+      };
+
+      window.removePhoto = function() {
+        currentPhotoBase64 = '';
+        const box = document.getElementById('photoPreviewBox');
+        if (box) {
+          box.innerHTML = `<div id="photoPlaceholder" class="text-slate-300 grid place-items-center"><i data-lucide="image" class="w-8 h-8"></i></div>`;
+          lucide.createIcons();
+        }
+        const fileInput = document.getElementById('photoFileInput');
+        if (fileInput) fileInput.value = '';
+        const removeBtn = document.getElementById('removePhotoBtn');
+        if (removeBtn) removeBtn.classList.add('hidden');
+      };
+
+      // Simpan data dengan PREPARED STATEMENT
+      window.saveData = function(id) {
+        const form = document.getElementById('dataForm');
+        if (!form) return;
+        const schema = siswaValidationSchema(id);
+
+        // Tampilkan error validasi di dalam modal
+        const showModalError = (msg) => {
+          let alertBox = document.getElementById('formModalAlert');
+          if (!alertBox) {
+            alertBox = document.createElement('div');
+            alertBox.id = 'formModalAlert';
+            form.insertAdjacentElement('beforebegin', alertBox);
+          }
+          alertBox.className = 'mb-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2';
+          alertBox.innerHTML = `<i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i><span>${msg}</span>`;
+          if (window.lucide) lucide.createIcons();
+          alertBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        };
+
+        const clearModalError = () => {
+          const alertBox = document.getElementById('formModalAlert');
+          if (alertBox) alertBox.remove();
+        };
+
+        clearModalError();
+
+        if (!Validator.validateForm(form, schema)) {
+          showModalError('Mohon lengkapi seluruh isian form dengan benar. Periksa field yang ditandai merah.');
+          return;
+        }
+
+        try {
+          // Ambil nilai dari form secara manual (agar select value juga terbaca)
+          const getValue = (name) => {
+            const el = form.querySelector(`[name="${name}"]`);
+            return el ? el.value.trim() : '';
+          };
+
+          const obj = {
+            nis:      getValue('nis'),
+            name:     getValue('name'),
+            kelas:    getValue('kelas'),
+            jurusan:  getValue('jurusan'),
+            username: getValue('username'),
+            status:   getValue('status'),
+            photo:    currentPhotoBase64 || ''
+          };
+
+          // Validasi ulang: pastikan field penting tidak kosong
+          if (!obj.nis || !obj.name || !obj.kelas || !obj.jurusan || !obj.username || !obj.status) {
+            showModalError('Ada field yang masih kosong. Pastikan semua field wajib terisi.');
+            return;
+          }
+
+          if (id) {
+            // === MODE EDIT ===
+            const siswaList = DB.get('siswa', []);
+            const idx = siswaList.findIndex(x => x.id === id);
+            if (idx === -1) throw new Error('Data siswa tidak ditemukan (id=' + id + ')');
+
+            // Simpan username & password lama — JANGAN DIUBAH saat edit
+            const originalUsername = siswaList[idx].username;
+
+            // Hanya update data profil siswa, username tetap pakai yang lama
+            siswaList[idx] = {
+              ...siswaList[idx],
+              nis:     obj.nis,
+              name:    obj.name,
+              kelas:   obj.kelas,
+              jurusan: obj.jurusan,
+              status:  obj.status,
+              photo:   obj.photo,
+              // username TIDAK diubah — tetap pakai username lama
+              username: originalUsername
+            };
+            DB.set('siswa', siswaList);
+
+            // Hanya update nama tampilan di users, username & password TIDAK diubah
+            const userList = DB.get('users', []);
+            const userIdx = userList.findIndex(u => u.username === originalUsername);
+            if (userIdx !== -1) {
+              userList[userIdx].name = obj.name; // hanya nama yang diperbarui
+              // username & password DIBIARKAN sama
+              DB.set('users', userList);
+            }
+
+            showFlash('Sukses', `Data siswa ${obj.name} berhasil diperbarui. Login tetap: ${originalUsername}`, 'success');
+          } else {
+            // === MODE TAMBAH ===
+            const siswaList = DB.get('siswa', []);
+            const userList  = DB.get('users',  []);
+
+            // Periksa apakah NIS sudah ada
+            if (siswaList.find(x => String(x.nis).trim() === obj.nis)) {
+              showModalError(`NIS ${obj.nis} sudah terdaftar. Gunakan NIS yang berbeda.`);
+              return;
+            }
+            // Periksa apakah username sudah ada
+            if (userList.find(u => u.username === obj.username)) {
+              showModalError(`Username "${obj.username}" sudah digunakan. Pilih username lain.`);
+              return;
+            }
+
+            // Tambahkan siswa baru langsung ke array
+            const newSiswa = {
+              id:       Date.now(),
+              nis:      obj.nis,
+              name:     obj.name,
+              kelas:    obj.kelas,
+              jurusan:  obj.jurusan,
+              username: obj.username,
+              status:   obj.status,
+              photo:    obj.photo
+            };
+            siswaList.push(newSiswa);
+            DB.set('siswa', siswaList);
+
+            // Buat akun login otomatis untuk siswa baru
+            const newUser = {
+              id:       Date.now() + 1,
+              username: obj.username,
+              password: 'siswa123',
+              role:     'siswa',
+              name:     obj.name
+            };
+            userList.push(newUser);
+            DB.set('users', userList);
+
+            showFlash('Sukses', `Siswa ${obj.name} berhasil ditambahkan! Login: ${obj.username} / siswa123`, 'success');
+          }
+
+          closeModal();
+          render();
+
+        } catch (err) {
+          console.error('[saveData ERROR]', err);
+          showModalError('Terjadi kesalahan sistem: ' + err.message + '. Silakan coba lagi.');
+        }
+      };
+
+      // ==========================================
+      // DETAIL DATA SISWA LENGKAP
+      // ==========================================
+      window.openDetail = function(id) {
+        const data = DB.get('siswa', []);
+        const x = data.find(a => a.id === id);
+        if (!x) return;
+
+        // Ambil riwayat peminjaman siswa
+        const loans = DB.get('peminjaman', []).filter(p => p.studentId === x.id);
+        const laptops = DB.get('laptops', []);
+
+        const photoLarge = x.photo
+          ? `<img src="${x.photo}" alt="${esc(x.name)}" class="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover ring-4 ring-teal-500/20 shadow-md">`
+          : `<div class="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-gradient-to-tr from-teal-700 to-teal-500 text-white font-bold text-3xl grid place-items-center shadow-md">${esc(x.name.charAt(0))}</div>`;
+
+        const loanHistoryHtml = loans.length > 0
+          ? loans.slice().reverse().map(l => {
+              const lap = laptops.find(lp => lp.id == l.laptopId);
+              return `
+                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                  <div>
+                    <p class="font-semibold text-slate-800">${esc(lap?.name || 'Laptop')} [${esc(lap?.code || '-')}]</p>
+                    <p class="text-slate-400 mt-0.5">Kode: ${esc(l.code)} • Pengajuan: ${formatDate(l.requestDate)}</p>
+                  </div>
+                  <div>${badge(l.status)}</div>
+                </div>
+              `;
+            }).join('')
+          : '<p class="text-xs text-slate-400 text-center py-4">Belum pernah melakukan transaksi peminjaman laptop.</p>';
+
+        modal(
+          'Profil & Detail Lengkap Siswa',
+          `
+          <div class="space-y-5">
+            <!-- Header Profil Siswa -->
+            <div class="flex flex-col sm:flex-row items-center gap-5 p-4 rounded-2xl bg-gradient-to-br from-teal-50/50 to-slate-50 border border-teal-100/60">
+              ${photoLarge}
+              <div class="text-center sm:text-left">
+                <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                  <h3 class="text-xl font-bold text-slate-900">${esc(x.name)}</h3>
+                  ${badge(x.status)}
+                </div>
+                <p class="text-xs text-slate-500 mt-1 font-mono">NIS: <b>${esc(x.nis)}</b> • Akun: <b>@${esc(x.username)}</b></p>
+                <div class="mt-2.5 flex flex-wrap gap-2 justify-center sm:justify-start">
+                  <span class="px-2.5 py-1 rounded-lg bg-teal-100 text-teal-800 text-xs font-semibold">${esc(x.kelas)}</span>
+                  <span class="px-2.5 py-1 rounded-lg bg-blue-100 text-blue-800 text-xs font-semibold">${esc(x.jurusan)}</span>
+                  <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs">Total Pinjam: <b>${loans.length} kali</b></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab Data Rinci -->
+            <div class="grid sm:grid-cols-2 gap-3.5 text-xs">
+              <div class="p-3.5 rounded-xl border border-slate-100 bg-white">
+                <span class="text-slate-400">Nomor Induk Siswa (NIS)</span>
+                <p class="font-semibold text-slate-800 text-sm mt-0.5">${esc(x.nis)}</p>
+              </div>
+              <div class="p-3.5 rounded-xl border border-slate-100 bg-white">
+                <span class="text-slate-400">Nama Lengkap</span>
+                <p class="font-semibold text-slate-800 text-sm mt-0.5">${esc(x.name)}</p>
+              </div>
+              <div class="p-3.5 rounded-xl border border-slate-100 bg-white">
+                <span class="text-slate-400">Kelas</span>
+                <p class="font-semibold text-slate-800 text-sm mt-0.5">${esc(x.kelas)}</p>
+              </div>
+              <div class="p-3.5 rounded-xl border border-slate-100 bg-white">
+                <span class="text-slate-400">Program Keahlian / Jurusan</span>
+                <p class="font-semibold text-slate-800 text-sm mt-0.5">${esc(x.jurusan)}</p>
+              </div>
+            </div>
+
+            <!-- Riwayat Peminjaman Terkait -->
+            <div>
+              <h4 class="font-bold text-xs uppercase tracking-wider text-slate-400 mb-2.5 flex items-center gap-1.5">
+                <i data-lucide="history" class="w-3.5 h-3.5 text-teal-600"></i> Riwayat Peminjaman Laptop
+              </h4>
+              <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                ${loanHistoryHtml}
+              </div>
+            </div>
+          </div>
+          `,
+          `
+          <button onclick="closeModal()" class="btn-secondary">Tutup</button>
+          <button onclick="closeModal(); openForm(${x.id})" class="btn-primary">
+            <i data-lucide="pencil"></i> Edit Siswa
+          </button>
+          `
+        );
+        lucide.createIcons();
+      };
+
+      // ==========================================
+      // MODAL KONFIRMASI HAPUS KUSTOM
+      // ==========================================
+      window.confirmDelete = function(id) {
+        const data = DB.get('siswa', []);
+        const x = data.find(s => s.id === id);
+        if (!x) return;
+
+        modal(
+          'Konfirmasi Hapus Siswa',
+          `
+          <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 grid place-items-center shrink-0">
+              <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+            </div>
+            <div class="space-y-2">
+              <h4 class="font-bold text-slate-900 text-base">Hapus data siswa ini secara permanen?</h4>
+              <p class="text-sm text-slate-600">
+                Anda akan menghapus data siswa <b>${esc(x.name)}</b> (NIS: <span class="font-mono text-slate-700">${esc(x.nis)}</span>) beserta data profilnya.
+              </p>
+              <div class="p-3 bg-rose-50 border border-rose-100 rounded-xl text-xs text-rose-700">
+                <span class="font-bold">Perhatian:</span> Tindakan ini tidak dapat dibatalkan. Riwayat transaksi peminjaman siswa ini mungkin akan terpengaruh.
+              </div>
+            </div>
+          </div>
+          `,
+          `
+          <button onclick="closeModal()" class="btn-secondary">Batal</button>
+          <button onclick="executeDelete(${id})" class="btn-danger">
+            <i data-lucide="trash-2"></i> Ya, Hapus Siswa
+          </button>
+          `
+        );
+        lucide.createIcons();
+      };
+
+      window.executeDelete = function(id) {
+        const data = DB.get('siswa', []);
+        const x = data.find(s => s.id === id);
+        const studentName = x ? x.name : 'Siswa';
+
+        // Hapus dengan PREPARED STATEMENT
+        const stmt = DB.prepare("DELETE FROM siswa WHERE id = ?");
+        stmt.execute([id]);
+
+        closeModal();
+        showFlash('Berhasil Dihapus', `Data siswa ${studentName} telah berhasil dihapus dari sistem.`, 'success');
+        render();
+      };
+
+      render();
+    }
+  </script>
+</body>
+</html>

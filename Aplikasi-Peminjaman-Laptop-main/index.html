@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Peminjaman Laptop Sekolah</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="min-h-screen bg-slate-50">
+  <main class="min-h-screen grid lg:grid-cols-2">
+    <section class="hidden lg:flex bg-gradient-to-br from-teal-800 via-teal-700 to-slate-900 text-white p-12 items-center relative overflow-hidden">
+      <div class="max-w-xl mx-auto">
+        <div class="flex items-center gap-3 mb-10">
+          <div class="h-11 w-11 rounded-xl bg-white/15 grid place-items-center"><i data-lucide="laptop"></i></div>
+          <div><p class="font-bold text-lg">Lab Laptop</p><p class="text-sm text-blue-100">Sistem Peminjaman</p></div>
+        </div>
+        <h1 class="text-5xl font-bold leading-tight">Kelola peminjaman laptop sekolah dengan lebih teratur.</h1>
+        <p class="mt-5 text-teal-100 text-lg">Satu ruang kerja untuk memantau laptop, siswa, petugas, peminjaman, pengembalian, dan laporan.</p>
+        <div class="mt-10 grid grid-cols-2 gap-4">
+          <div class="rounded-2xl bg-white/10 p-5 backdrop-blur-sm"><i data-lucide="shield-check"></i><p class="mt-3 font-semibold">Multi Role</p><p class="text-sm text-teal-100">Admin, Petugas, Siswa</p></div>
+          <div class="rounded-2xl bg-white/10 p-5 backdrop-blur-sm"><i data-lucide="database"></i><p class="mt-3 font-semibold">LocalStorage</p><p class="text-sm text-teal-100">Data tetap tersimpan</p></div>
+        </div>
+      </div>
+    </section>
+    <section class="flex items-center justify-center p-6">
+      <div class="w-full max-w-md">
+        <div class="lg:hidden flex items-center gap-3 mb-10">
+          <div class="h-11 w-11 rounded-xl bg-blue-600 text-white grid place-items-center"><i data-lucide="laptop"></i></div>
+          <div><p class="font-bold text-lg text-slate-900">Lab Laptop</p><p class="text-sm text-slate-500">Sistem Peminjaman</p></div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-3xl p-7 shadow-xl shadow-slate-200/60 animate-[riseIn_.5s_ease_both]">
+          <h2 class="text-2xl font-bold text-slate-900">Masuk ke sistem</h2>
+          <p class="text-sm text-slate-500 mt-1">Gunakan akun demo untuk mencoba prototype.</p>
+          <form id="loginForm" class="mt-7 space-y-4">
+            <div>
+              <label class="label">Username / NIS</label>
+              <input id="username" class="input" required autocomplete="username" placeholder="Masukkan username">
+            </div>
+            <div>
+              <label class="label">Password</label>
+              <div class="relative"><input id="password" type="password" class="input pr-11" required autocomplete="current-password" placeholder="Masukkan password"><button id="togglePassword" type="button" class="icon-btn absolute right-1 top-1" aria-label="Tampilkan password"><i data-lucide="eye"></i></button></div>
+            </div>
+            <p id="loginError" class="hidden text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl p-3"></p>
+            <button class="btn-primary w-full" type="submit"><i data-lucide="log-in"></i> Login</button>
+          </form>
+          <div class="mt-6 rounded-2xl bg-slate-50 p-4 text-sm">
+            <p class="font-semibold text-slate-700 mb-2">Akun demo</p>
+            <div class="space-y-2 text-slate-500">
+              <button type="button" class="demo-account w-full text-left hover:text-teal-700" data-username="admin" data-password="admin123">Admin: <b>admin</b> / <b>admin123</b></button>
+              <button type="button" class="demo-account w-full text-left hover:text-teal-700" data-username="petugas" data-password="petugas123">Petugas: <b>petugas</b> / <b>petugas123</b></button>
+              <button type="button" class="demo-account w-full text-left hover:text-teal-700" data-username="siswa" data-password="siswa123">Siswa: <b>siswa</b> / <b>siswa123</b></button>
+            </div>
+          </div>
+        </div>
+        <p class="text-center text-xs text-slate-400 mt-5">Frontend Prototype • HTML + Tailwind CSS + Vanilla JavaScript</p>
+      </div>
+    </section>
+  </main>
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/validator.js"></script>
+  <script src="assets/js/auth.js"></script>
+  <script>document.getElementById('togglePassword').addEventListener('click',()=>{const input=document.getElementById('password');input.type=input.type==='password'?'text':'password'});document.querySelectorAll('.demo-account').forEach(button=>button.addEventListener('click',()=>{document.getElementById('username').value=button.dataset.username;document.getElementById('password').value=button.dataset.password;document.getElementById('username').focus()}));lucide.createIcons();</script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Riwayat - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/validator.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['siswa']);
+    if (user) {
+      layout('Riwayat Peminjaman', 'siswa', 'Riwayat');
+      document.getElementById('content').innerHTML = `
+        <div class="mb-5">
+          <h2 class="text-2xl font-bold text-slate-900">Riwayat Peminjaman Pribadi</h2>
+          <p class="text-sm text-slate-500">Rekapitulasi seluruh laptop yang pernah Anda ajukan dan pinjam.</p>
+        </div>
+        <div id="list" class="space-y-3"></div>
+      `;
+      lucide.createIcons();
+
+      const u = currentUser();
+      const s = DB.get('siswa').find(x => x.username === u.username);
+      const p = DB.get('peminjaman').filter(x => x.studentId === s?.id);
+      const l = DB.get('laptops');
+      const returns = DB.get('pengembalian');
+
+      document.getElementById('list').innerHTML = p.slice().reverse().map(x => {
+        const lap = l.find(a => a.id == x.laptopId);
+        const ret = returns.find(r => r.peminjamanId == x.id);
+
+        return `
+          <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-slate-800">${esc(lap?.name || '-')}</span>
+                <span class="text-xs text-slate-400 font-mono">(${esc(lap?.code || '-')})</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-1">Kode: <b class="font-mono text-slate-700">${esc(x.code)}</b> • Tanggal Pengajuan: ${formatDate(x.requestDate)}</p>
+              <p class="text-xs text-slate-400 mt-0.5">Keperluan: "${esc(x.purpose)}"</p>
+              ${ret ? `
+                <div class="mt-2 text-xs text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 flex flex-wrap gap-3">
+                  <span>Dikembalikan: <b>${formatDate(ret.returnedDate)}</b></span>
+                  <span>Kondisi: <b>${esc(ret.condition)}</b></span>
+                  ${ret.penalty ? `<span class="text-red-600 font-semibold">Denda: Rp ${Number(ret.penalty).toLocaleString('id-ID')}</span>` : ''}
+                </div>
+              ` : ''}
+            </div>
+            <div>${badge(x.status)}</div>
+          </div>
+        `;
+      }).join('') || '<div class="bg-white border rounded-2xl p-8 text-center text-slate-400">Belum ada riwayat peminjaman laptop.</div>';
+
+      lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

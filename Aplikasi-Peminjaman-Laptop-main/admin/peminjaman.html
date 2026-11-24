@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Data Peminjaman - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/validator.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['admin']);
+    if (user) {
+      layout('Data Peminjaman', 'admin', 'Data Peminjaman');
+      document.getElementById('content').innerHTML = `
+        <div class="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Data Transaksi Peminjaman</h2>
+            <p class="text-sm text-slate-500">Pantau dan kelola seluruh transaksi peminjaman laptop sekolah.</p>
+          </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+          <div class="p-4 flex flex-col sm:flex-row gap-3 border-b border-slate-100">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+              <input id="search" class="input pl-9" placeholder="Cari kode transaksi, nama siswa, atau status...">
+            </div>
+            <select id="filter" class="input sm:max-w-48">
+              <option value="Semua">Semua Status</option>
+              <option value="Menunggu">Menunggu</option>
+              <option value="Dipinjam">Dipinjam</option>
+              <option value="Dikembalikan">Dikembalikan</option>
+              <option value="Ditolak">Ditolak</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 text-slate-500">
+                <tr>
+                  <th class="px-4 py-3 text-left">Kode</th>
+                  <th class="px-4 py-3 text-left">Nama Siswa</th>
+                  <th class="px-4 py-3 text-left">Unit Laptop</th>
+                  <th class="px-4 py-3 text-left">Tgl Pengajuan</th>
+                  <th class="px-4 py-3 text-left">Rencana Kembali</th>
+                  <th class="px-4 py-3 text-left">Status</th>
+                  <th class="px-4 py-3 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      lucide.createIcons();
+
+      const render = () => {
+        const loans = DB.get('peminjaman');
+        const students = DB.get('siswa');
+        const laptops = DB.get('laptops');
+        const q = document.getElementById('search').value.toLowerCase();
+        const f = document.getElementById('filter').value;
+
+        const filtered = loans.slice().reverse().filter(x => {
+          const matchF = f === 'Semua' || x.status === f;
+          const matchQ = JSON.stringify(x).toLowerCase().includes(q);
+          return matchF && matchQ;
+        });
+
+        document.getElementById('rows').innerHTML = filtered.map(x => {
+          const s = students.find(a => a.id == x.studentId);
+          const l = laptops.find(a => a.id == x.laptopId);
+          return `
+            <tr class="border-t border-slate-100 hover:bg-slate-50">
+              <td class="px-4 py-3 font-semibold text-slate-800 font-mono text-xs">${esc(x.code)}</td>
+              <td class="px-4 py-3 font-medium">${esc(s?.name || '-')}</td>
+              <td class="px-4 py-3">${esc(l?.name || '-')} <span class="text-xs text-slate-400 font-mono">${esc(l?.code || '')}</span></td>
+              <td class="px-4 py-3">${formatDate(x.requestDate)}</td>
+              <td class="px-4 py-3">${formatDate(x.returnPlan)}</td>
+              <td class="px-4 py-3">${badge(x.status)}</td>
+              <td class="px-4 py-3 text-right whitespace-nowrap">
+                <button class="icon-btn" title="Lihat detail" onclick="detail(${x.id})"><i data-lucide="eye"></i></button>
+                <button class="icon-btn text-red-600" title="Hapus transaksi" onclick="removeLoan(${x.id})"><i data-lucide="trash-2"></i></button>
+              </td>
+            </tr>
+          `;
+        }).join('') || `<tr><td colspan="7" class="text-center py-8 text-slate-400">Tidak ada data peminjaman yang cocok.</td></tr>`;
+
+        lucide.createIcons();
+      };
+
+      document.getElementById('search').oninput = render;
+      document.getElementById('filter').onchange = render;
+
+      window.detail = function(id) {
+        const loans = DB.get('peminjaman');
+        const students = DB.get('siswa');
+        const laptops = DB.get('laptops');
+        const x = loans.find(a => a.id === id);
+        if (!x) return;
+        const s = students.find(a => a.id == x.studentId);
+        const l = laptops.find(a => a.id == x.laptopId);
+
+        modal(
+          'Detail Transaksi Peminjaman',
+          `
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div><p class="text-xs text-slate-400">Kode Transaksi</p><p class="font-semibold mt-1">${esc(x.code)}</p></div>
+            <div><p class="text-xs text-slate-400">Status</p><p class="mt-1">${badge(x.status)}</p></div>
+            <div><p class="text-xs text-slate-400">Peminjam</p><p class="font-semibold mt-1">${esc(s?.name || '-')} (${esc(s?.nis || '-')})</p></div>
+            <div><p class="text-xs text-slate-400">Unit Laptop</p><p class="font-semibold mt-1">${esc(l?.name || '-')} [${esc(l?.code || '-')}]</p></div>
+            <div><p class="text-xs text-slate-400">Tanggal Pengajuan</p><p class="font-semibold mt-1">${formatDate(x.requestDate)}</p></div>
+            <div><p class="text-xs text-slate-400">Tanggal Realisasi Pinjam</p><p class="font-semibold mt-1">${formatDate(x.borrowDate)}</p></div>
+            <div><p class="text-xs text-slate-400">Rencana Pengembalian</p><p class="font-semibold mt-1">${formatDate(x.returnPlan)}</p></div>
+            <div><p class="text-xs text-slate-400">Tanggal Realisasi Kembali</p><p class="font-semibold mt-1">${formatDate(x.returnedDate)}</p></div>
+            <div class="sm:col-span-2"><p class="text-xs text-slate-400">Keperluan</p><p class="font-semibold mt-1">${esc(x.purpose)}</p></div>
+            ${x.note ? `<div class="sm:col-span-2"><p class="text-xs text-slate-400">Catatan / Keterangan</p><p class="font-semibold mt-1 text-slate-700">${esc(x.note)}</p></div>` : ''}
+          </div>
+          `,
+          '<button onclick="closeModal()" class="btn-secondary">Tutup</button>'
+        );
+      };
+
+      window.removeLoan = function(id) {
+        if (!confirm('Hapus riwayat transaksi peminjaman ini?')) return;
+        const stmt = DB.prepare("DELETE FROM peminjaman WHERE id = ?");
+        stmt.execute([id]);
+        toast('Data transaksi berhasil dihapus (Prepared Statement)');
+        render();
+      };
+
+      render();
+    }
+  </script>
+</body>
+</html>

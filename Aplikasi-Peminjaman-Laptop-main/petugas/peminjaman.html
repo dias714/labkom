@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Permintaan Peminjaman - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/validator.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['petugas']);
+    if (user) {
+      layout('Permintaan Peminjaman', 'petugas', 'Permintaan Peminjaman');
+      document.getElementById('content').innerHTML = `
+        <div class="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Permintaan Peminjaman</h2>
+            <p class="text-sm text-slate-500">Tinjau pengajuan laptop dari siswa, setujui atau tolak dengan Prepared Statement.</p>
+          </div>
+          <select id="filterStatus" class="input sm:max-w-48">
+            <option value="Semua">Semua Pengajuan</option>
+            <option value="Menunggu" selected>Menunggu Persetujuan</option>
+            <option value="Dipinjam">Dipinjam (Aktif)</option>
+            <option value="Dikembalikan">Dikembalikan</option>
+            <option value="Ditolak">Ditolak</option>
+          </select>
+        </div>
+        <div id="list" class="space-y-3"></div>
+      `;
+      lucide.createIcons();
+
+      function render() {
+        const p = DB.get('peminjaman');
+        const s = DB.get('siswa');
+        const l = DB.get('laptops');
+        const fStatus = document.getElementById('filterStatus').value;
+
+        const filtered = p.slice().reverse().filter(x => {
+          return fStatus === 'Semua' || x.status === fStatus;
+        });
+
+        document.getElementById('list').innerHTML = filtered.map(x => {
+          const st = s.find(a => a.id == x.studentId);
+          const lp = l.find(a => a.id == x.laptopId);
+          return `
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <div class="flex gap-2 items-center">
+                    <h3 class="font-bold text-slate-800">${esc(x.code)}</h3>
+                    ${badge(x.status)}
+                  </div>
+                  <p class="text-sm text-slate-700 font-semibold mt-2">${esc(st?.name || 'Siswa')} (${esc(st?.nis || '-')}) • ${esc(st?.kelas || '-')}</p>
+                  <p class="text-sm text-slate-500 mt-0.5">${esc(lp?.name || 'Laptop')} - <span class="font-mono text-xs">${esc(lp?.code || '-')}</span> (${esc(lp?.brand || '')} ${esc(lp?.model || '')})</p>
+                  <div class="flex flex-wrap gap-4 text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">
+                    <span>Pengajuan: <b>${formatDate(x.requestDate)}</b></span>
+                    <span>Rencana Kembali: <b>${formatDate(x.returnPlan)}</b></span>
+                    <span>Keperluan: <i>"${esc(x.purpose)}"</i></span>
+                    ${x.note ? `<span class="text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Catatan: ${esc(x.note)}</span>` : ''}
+                  </div>
+                </div>
+                ${x.status === 'Menunggu' ? `
+                  <div class="flex gap-2 shrink-0">
+                    <button class="btn-danger" onclick="promptReject(${x.id})">
+                      <i data-lucide="x"></i> Tolak
+                    </button>
+                    <button class="btn-success" onclick="approveLoan(${x.id})">
+                      <i data-lucide="check"></i> Setujui (Prepared)
+                    </button>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          `;
+        }).join('') || '<div class="bg-white border rounded-2xl p-8 text-center text-slate-400">Tidak ada pengajuan yang sesuai filter.</div>';
+
+        lucide.createIcons();
+      }
+
+      document.getElementById('filterStatus').addEventListener('change', render);
+
+      window.approveLoan = function(id) {
+        const p = DB.get('peminjaman').find(a => a.id === id);
+        if (!p) return;
+        const lp = DB.get('laptops').find(a => a.id === p.laptopId);
+
+        if (!lp || lp.status !== 'Tersedia') {
+          toast('Laptop sedang tidak tersedia atau sudah dipinjam!', 'error');
+          return;
+        }
+
+        const todayStr = new Date().toISOString().slice(0, 10);
+
+        // EKSEKUSI PREPARED STATEMENT DENGAN TRANSAKSI
+        DB.beginTransaction();
+        try {
+          // 1. Update status laptop menjadi Dipinjam
+          const stmtLap = DB.prepare("UPDATE laptops SET status = ? WHERE id = ?");
+          stmtLap.execute(['Dipinjam', p.laptopId]);
+
+          // 2. Update status peminjaman menjadi Dipinjam
+          const stmtLoan = DB.prepare("UPDATE peminjaman SET status = ?, borrowDate = ? WHERE id = ?");
+          stmtLoan.execute(['Dipinjam', todayStr, p.id]);
+
+          DB.commit();
+          toast('Pengajuan peminjaman berhasil disetujui (Prepared Statement)');
+          render();
+        } catch (err) {
+          DB.rollback();
+          toast('Terjadi kesalahan: ' + err.message, 'error');
+        }
+      };
+
+      window.promptReject = function(id) {
+        modal(
+          'Alasan Penolakan Peminjaman',
+          `
+          <form id="rejectForm" class="space-y-3" novalidate>
+            <label class="label">Alasan Penolakan <span class="text-red-500">*</span></label>
+            <textarea id="rejectReason" name="rejectReason" class="input" rows="3" placeholder="Contoh: Unit sedang dijadwalkan untuk ujian/praktik lain" required></textarea>
+          </form>
+          `,
+          `
+          <button onclick="closeModal()" class="btn-secondary">Batal</button>
+          <button onclick="rejectLoan(${id})" class="btn-danger">
+            <i data-lucide="shield-check"></i> Tolak Pengajuan
+          </button>
+          `
+        );
+
+        const form = document.getElementById('rejectForm');
+        Validator.attach(form, {
+          rejectReason: [Validator.rules.required('Alasan penolakan wajib diisi'), Validator.rules.minLength(5, 'Minimal 5 karakter')]
+        });
+        lucide.createIcons();
+      };
+
+      window.rejectLoan = function(id) {
+        const form = document.getElementById('rejectForm');
+        const schema = {
+          rejectReason: [Validator.rules.required('Alasan penolakan wajib diisi'), Validator.rules.minLength(5, 'Minimal 5 karakter')]
+        };
+        if (!Validator.validateForm(form, schema)) return;
+
+        const reason = document.getElementById('rejectReason').value.trim();
+
+        // EKSEKUSI PREPARED STATEMENT
+        const stmt = DB.prepare("UPDATE peminjaman SET status = ?, note = ? WHERE id = ?");
+        stmt.execute(['Ditolak', reason, id]);
+
+        closeModal();
+        toast('Pengajuan peminjaman berhasil ditolak');
+        render();
+      };
+
+      render();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Laporan - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/validator.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['admin']);
+    if (user) {
+      layout('Laporan Peminjaman', 'admin', 'Laporan');
+      document.getElementById('content').innerHTML = `
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-5">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Laporan & Rekapitulasi</h2>
+            <p class="text-sm text-slate-500">Filter, cetak, dan ekspor data peminjaman laptop sekolah.</p>
+          </div>
+          <div class="flex gap-2">
+            <button id="exportBtn" class="btn-secondary">
+              <i data-lucide="download"></i> Ekspor CSV
+            </button>
+            <button onclick="window.print()" class="btn-primary">
+              <i data-lucide="printer"></i> Cetak Laporan
+            </button>
+          </div>
+        </div>
+
+        <div class="grid sm:grid-cols-4 gap-4" id="reportStats"></div>
+
+        <div class="bg-white border border-slate-200 rounded-2xl mt-5 overflow-hidden shadow-sm">
+          <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+              <input id="search" class="input pl-9" placeholder="Cari kode, siswa, atau laptop...">
+            </div>
+            <select id="filter" class="input sm:max-w-48">
+              <option value="Semua status">Semua Status</option>
+              <option value="Menunggu">Menunggu</option>
+              <option value="Dipinjam">Dipinjam</option>
+              <option value="Dikembalikan">Dikembalikan</option>
+              <option value="Ditolak">Ditolak</option>
+            </select>
+            <input id="from" type="date" class="input sm:max-w-44" title="Dari tanggal">
+            <input id="to" type="date" class="input sm:max-w-44" title="Sampai tanggal">
+          </div>
+          <div class="px-4 py-2 text-xs text-slate-500 border-b border-slate-50" id="resultCount"></div>
+          <div class="table-wrap">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 text-slate-500">
+                <tr>
+                  <th class="px-4 py-3 text-left">Kode</th>
+                  <th class="px-4 py-3 text-left">Siswa Peminjam</th>
+                  <th class="px-4 py-3 text-left">Unit Laptop</th>
+                  <th class="px-4 py-3 text-left">Tanggal Pengajuan</th>
+                  <th class="px-4 py-3 text-left">Batas / Tgl Kembali</th>
+                  <th class="px-4 py-3 text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      lucide.createIcons();
+
+      const loans = DB.get('peminjaman');
+      const students = DB.get('siswa');
+      const laptops = DB.get('laptops');
+
+      const enrich = x => ({
+        ...x,
+        student: students.find(s => s.id == x.studentId),
+        laptop: laptops.find(l => l.id == x.laptopId)
+      });
+
+      function filtered() {
+        const q = document.getElementById('search').value.toLowerCase();
+        const f = document.getElementById('filter').value;
+        const from = document.getElementById('from').value;
+        const to = document.getElementById('to').value;
+
+        return loans.map(enrich).filter(x => {
+          const matchF = f === 'Semua status' || x.status === f;
+          const matchFrom = !from || x.requestDate >= from;
+          const matchTo = !to || x.requestDate <= to;
+          const matchQ = [x.code, x.student?.name, x.laptop?.name].join(' ').toLowerCase().includes(q);
+          return matchF && matchFrom && matchTo && matchQ;
+        }).reverse();
+      }
+
+      function render() {
+        const data = filtered();
+        document.getElementById('reportStats').innerHTML = [
+          statCard('Ditampilkan', data.length, 'file-text'),
+          statCard('Menunggu', data.filter(x => x.status === 'Menunggu').length, 'hourglass'),
+          statCard('Sedang Dipinjam', data.filter(x => x.status === 'Dipinjam').length, 'clock-3'),
+          statCard('Selesai Dikembalikan', data.filter(x => x.status === 'Dikembalikan').length, 'check-circle')
+        ].join('');
+
+        document.getElementById('resultCount').textContent = 'Menampilkan ' + data.length + ' transaksi peminjaman';
+
+        document.getElementById('rows').innerHTML = data.map(x => `
+          <tr class="border-t border-slate-100 hover:bg-slate-50">
+            <td class="px-4 py-3 font-semibold text-slate-800 font-mono text-xs">${esc(x.code)}</td>
+            <td class="px-4 py-3 font-medium">${esc(x.student?.name || '-')}</td>
+            <td class="px-4 py-3">${esc(x.laptop?.name || '-')} <span class="text-xs text-slate-400 font-mono">${esc(x.laptop?.code || '')}</span></td>
+            <td class="px-4 py-3">${formatDate(x.requestDate)}</td>
+            <td class="px-4 py-3 text-xs">${x.returnedDate ? formatDate(x.returnedDate) + ' (Kembali)' : formatDate(x.returnPlan)}</td>
+            <td class="px-4 py-3">${badge(x.status)}</td>
+          </tr>
+        `).join('') || '<tr><td colspan="6" class="px-4 py-10 text-center text-slate-400">Tidak ada transaksi yang cocok.</td></tr>';
+
+        lucide.createIcons();
+      }
+
+      function exportCsv() {
+        const rows = [
+          ['Kode Transaksi', 'Siswa', 'Laptop', 'Tanggal Pengajuan', 'Batas Kembali', 'Tanggal Dikembalikan', 'Status', 'Keperluan'],
+          ...filtered().map(x => [
+            x.code,
+            x.student?.name || '-',
+            x.laptop?.name || '-',
+            x.requestDate,
+            x.returnPlan,
+            x.returnedDate || '-',
+            x.status,
+            x.purpose
+          ])
+        ];
+        const csv = rows.map(row => row.map(cell => '"' + String(cell).replaceAll('"', '""') + '"').join(',')).join('\n');
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'laporan-peminjaman-laptop.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      ['search', 'filter', 'from', 'to'].forEach(id => document.getElementById(id).addEventListener('input', render));
+      document.getElementById('filter').addEventListener('change', render);
+      document.getElementById('exportBtn').addEventListener('click', exportCsv);
+
+      render();
+    }
+  </script>
+</body>
+</html>

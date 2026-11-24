@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Pengembalian - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/validator.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['petugas']);
+    if (user) {
+      layout('Pengembalian', 'petugas', 'Pengembalian');
+      document.getElementById('content').innerHTML = `
+        <div class="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Proses Pengembalian Laptop</h2>
+            <p class="text-sm text-slate-500">Periksa kondisi fisik unit, catat denda jika ada, dan konfirmasi pengembalian dengan Prepared Statement.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-500 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
+              Petugas Aktif: <b>${esc(user.name)}</b>
+            </span>
+          </div>
+        </div>
+        <div id="list" class="space-y-3"></div>
+      `;
+      lucide.createIcons();
+
+      function render() {
+        const p = DB.get('peminjaman');
+        const s = DB.get('siswa');
+        const l = DB.get('laptops');
+        const activeLoans = p.filter(x => x.status === 'Dipinjam');
+
+        document.getElementById('list').innerHTML = activeLoans.map(x => {
+          const st = s.find(a => a.id == x.studentId);
+          const lp = l.find(a => a.id == x.laptopId);
+          const isLate = new Date(x.returnPlan + 'T23:59:59') < new Date();
+
+          return `
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition">
+              <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h3 class="font-bold text-slate-800">${esc(x.code)}</h3>
+                    <span class="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold">Dipinjam</span>
+                    ${isLate ? '<span class="text-xs px-2 py-0.5 rounded bg-red-100 text-red-800 font-semibold">Terlambat</span>' : ''}
+                    ${x.note && x.note.includes('diajukan oleh siswa') ? '<span class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">Diajukan Siswa</span>' : ''}
+                  </div>
+                  <p class="text-sm font-semibold text-slate-700 mt-2">${esc(st?.name || 'Siswa')} (${esc(st?.nis || '-')}) • ${esc(st?.kelas || '-')}</p>
+                  <p class="text-sm text-slate-500 mt-0.5">${esc(lp?.name || 'Laptop')} - <span class="font-mono">${esc(lp?.code || '-')}</span> (${esc(lp?.brand || '')} ${esc(lp?.model || '')})</p>
+                  <div class="flex flex-wrap gap-4 text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">
+                    <span>Mulai Pinjam: <b>${formatDate(x.borrowDate)}</b></span>
+                    <span>Batas Kembali: <b class="${isLate ? 'text-red-600 font-bold' : 'text-slate-700'}">${formatDate(x.returnPlan)}</b></span>
+                    <span>Keperluan: <i>"${esc(x.purpose)}"</i></span>
+                  </div>
+                </div>
+                <button class="btn-primary shrink-0" onclick="processReturn(${x.id})">
+                  <i data-lucide="rotate-ccw"></i> Proses Pengembalian
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('') || '<div class="bg-white border border-dashed rounded-2xl p-10 text-center text-slate-400"><i data-lucide="check-circle" class="w-10 h-10 text-emerald-500 mx-auto mb-2"></i><p class="font-semibold text-slate-700">Tidak ada peminjaman yang sedang aktif.</p><p class="text-sm mt-1">Semua laptop telah dikembalikan atau belum ada transaksi aktif.</p></div>';
+
+        lucide.createIcons();
+      }
+
+      window.processReturn = function(id) {
+        const p = DB.get('peminjaman').find(a => a.id === id);
+        if (!p) return;
+        const l = DB.get('laptops').find(a => a.id === p.laptopId);
+        const s = DB.get('siswa').find(a => a.id === p.studentId);
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const isLate = new Date(p.returnPlan + 'T23:59:59') < new Date();
+        const estPenalty = isLate ? 10000 : 0;
+
+        modal(
+          'Pemeriksaan & Pengembalian Laptop',
+          `
+          <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 mb-4 text-xs space-y-1">
+            <p><b>Peminjam:</b> ${esc(s?.name)} (${esc(s?.nis)}) - ${esc(s?.kelas)}</p>
+            <p><b>Perangkat:</b> ${esc(l?.name)} [${esc(l?.code)}] (${esc(l?.brand)} ${esc(l?.model)})</p>
+            <p><b>Kondisi Awal:</b> ${esc(l?.condition || 'Baik')}</p>
+          </div>
+          <form id="returnForm" class="space-y-4" novalidate>
+            <div>
+              <label class="label">Kondisi Laptop Saat Dikembalikan <span class="text-red-500">*</span></label>
+              <select id="condition" name="condition" class="input" required onchange="toggleDamageNote(this.value)">
+                <option value="Baik" selected>Baik (Lengkap & Normal)</option>
+                <option value="Perlu diperiksa">Perlu diperiksa (Lecet / Kendala Minor)</option>
+                <option value="Rusak Ringan">Rusak Ringan</option>
+                <option value="Rusak Berat">Rusak Berat / Komponen Hilang</option>
+              </select>
+            </div>
+            <div id="damageNoteWrapper">
+              <label class="label">Catatan Pemeriksaan Fisik & Fungsi</label>
+              <textarea id="note" name="note" class="input" rows="3" placeholder="Tuliskan hasil pengecekan fisik (keyboard, layar, charger, baterai)"></textarea>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label class="label">Tanggal Pengembalian</label>
+                <input id="returnedDate" name="returnedDate" type="date" class="input" value="${todayStr}" required>
+              </div>
+              <div>
+                <label class="label">Denda Keterlambatan / Kerusakan (Rp)</label>
+                <input id="penalty" name="penalty" type="number" min="0" step="5000" class="input" value="${estPenalty}">
+                <p class="form-helper">${isLate ? 'Terlambat dari jadwal, denda otomatis disarankan' : 'Isi 0 jika tidak ada denda'}</p>
+              </div>
+            </div>
+          </form>
+          `,
+          `
+          <button onclick="closeModal()" class="btn-secondary">Batal</button>
+          <button onclick="saveReturn(${id})" class="btn-primary">
+            <i data-lucide="shield-check"></i> Konfirmasi Pengembalian (Prepared)
+          </button>
+          `
+        );
+
+        const form = document.getElementById('returnForm');
+        const schema = {
+          condition: [Validator.rules.required('Kondisi wajib dipilih')],
+          returnedDate: [Validator.rules.required('Tanggal pengembalian wajib diisi')],
+          penalty: [Validator.rules.numeric('Denda harus berupa angka')]
+        };
+        Validator.attach(form, schema);
+        lucide.createIcons();
+      };
+
+      window.toggleDamageNote = function(condition) {
+        const noteEl = document.getElementById('note');
+        if (condition !== 'Baik' && !noteEl.value) {
+          noteEl.placeholder = 'WAJIB: Jelaskan detail kerusakan atau kendala yang ditemukan';
+        }
+      };
+
+      window.saveReturn = function(id) {
+        const form = document.getElementById('returnForm');
+        const schema = {
+          condition: [Validator.rules.required('Kondisi wajib dipilih')],
+          returnedDate: [Validator.rules.required('Tanggal pengembalian wajib diisi')],
+          penalty: [Validator.rules.numeric('Denda harus berupa angka')]
+        };
+
+        if (!Validator.validateForm(form, schema)) return;
+
+        const p = DB.get('peminjaman').find(a => a.id === id);
+        if (!p) return;
+
+        const condition = document.getElementById('condition').value;
+        const note = document.getElementById('note').value.trim() || (condition === 'Baik' ? 'Dikembalikan dalam kondisi baik' : 'Perlu tindak lanjut teknisi');
+        const returnedDate = document.getElementById('returnedDate').value;
+        const penalty = Number(document.getElementById('penalty').value) || 0;
+
+        // Validasi jika rusak maka catatan wajib diisi
+        if (condition !== 'Baik' && note.length < 5) {
+          toast('Mohon jelaskan catatan kerusakan minimal 5 karakter', 'error');
+          document.getElementById('note').focus();
+          return;
+        }
+
+        // Tentukan status laptop baru
+        let newLaptopStatus = 'Tersedia';
+        if (condition === 'Rusak Berat') newLaptopStatus = 'Rusak';
+        else if (condition === 'Rusak Ringan' || condition === 'Perlu diperiksa') newLaptopStatus = 'Maintenance';
+
+        // EKSEKUSI PREPARED STATEMENT UNTUK PENGEMBALIAN
+        DB.beginTransaction();
+        try {
+          // 1. Simpan ke tabel pengembalian
+          const stmtReturn = DB.prepare(`
+            INSERT INTO pengembalian (peminjamanId, code, studentId, laptopId, returnedDate, condition, note, penalty, officerName)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+          stmtReturn.execute([p.id, p.code, p.studentId, p.laptopId, returnedDate, condition, note, penalty, user.name]);
+
+          // 2. Update status transaksi peminjaman
+          const stmtLoan = DB.prepare(`
+            UPDATE peminjaman 
+            SET status = ?, returnedDate = ?, note = ? 
+            WHERE id = ?
+          `);
+          stmtLoan.execute(['Dikembalikan', returnedDate, note, p.id]);
+
+          // 3. Update status dan kondisi laptop
+          const stmtLaptop = DB.prepare(`
+            UPDATE laptops 
+            SET status = ?, condition = ? 
+            WHERE id = ?
+          `);
+          stmtLaptop.execute([newLaptopStatus, condition, p.laptopId]);
+
+          DB.commit();
+          closeModal();
+          toast('Pengembalian laptop berhasil diproses (Prepared Statement)');
+          render();
+
+          // Tampilkan ringkasan bukti serah terima
+          showReceipt(p.code, returnedDate, condition, penalty, note);
+        } catch (err) {
+          DB.rollback();
+          toast('Gagal memproses pengembalian: ' + err.message, 'error');
+        }
+      };
+
+      function showReceipt(code, returnedDate, condition, penalty, note) {
+        modal(
+          'Bukti Serah Terima Pengembalian',
+          `
+          <div class="border border-slate-200 rounded-2xl p-6 bg-slate-50 font-mono text-xs text-slate-700 space-y-2">
+            <div class="text-center pb-3 border-b border-dashed border-slate-300">
+              <p class="font-bold text-sm text-slate-900">LAB KOMPUTER & LAPTOP SEKOLAH</p>
+              <p class="text-[11px] text-slate-500">Tanda Bukti Pengembalian Unit</p>
+            </div>
+            <div class="pt-2">
+              <p>No Transaksi : <b>${esc(code)}</b></p>
+              <p>Tgl Kembali  : ${formatDate(returnedDate)}</p>
+              <p>Kondisi Akhir: <b>${esc(condition)}</b></p>
+              <p>Petugas      : ${esc(user.name)}</p>
+              <p>Denda        : Rp ${penalty.toLocaleString('id-ID')}</p>
+              <p>Catatan      : ${esc(note)}</p>
+            </div>
+            <div class="pt-3 border-t border-dashed border-slate-300 text-center text-slate-500 text-[10px]">
+              Status Perangkat telah dikembalikan ke sistem dengan Prepared Statement.
+            </div>
+          </div>
+          `,
+          `<button onclick="window.print()" class="btn-secondary"><i data-lucide="printer"></i> Cetak Bukti</button><button onclick="closeModal()" class="btn-primary">Selesai</button>`
+        );
+      }
+
+      render();
+    }
+  </script>
+</body>
+</html>

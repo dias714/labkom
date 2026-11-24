@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Pengembalian - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/validator.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['admin']);
+    if (user) {
+      layout('Pengembalian', 'admin', 'Pengembalian');
+      document.getElementById('content').innerHTML = `
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-5">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Kelola Pengembalian Laptop</h2>
+            <p class="text-sm text-slate-500">Pantau laptop yang masih dipinjam serta riwayat pengembalian dan denda.</p>
+          </div>
+          <div class="flex items-center gap-2 text-sm text-slate-500">
+            <i data-lucide="refresh-cw" class="w-4 h-4 text-emerald-600"></i>
+            <span id="updatedAt"></span>
+          </div>
+        </div>
+
+        <div id="stats" class="grid sm:grid-cols-3 gap-4"></div>
+
+        <div class="mt-6 flex border-b border-slate-200 gap-2">
+          <button id="tabActiveBtn" class="px-4 py-2.5 font-semibold text-sm border-b-2 border-teal-700 text-teal-800" onclick="switchTab('active')">
+            Laptop Masih Dipinjam
+          </button>
+          <button id="tabHistoryBtn" class="px-4 py-2.5 font-medium text-sm text-slate-500 hover:text-slate-800" onclick="switchTab('history')">
+            Riwayat Pengembalian Selesai
+          </button>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden mt-4 shadow-sm">
+          <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+              <input id="search" class="input pl-9" placeholder="Cari kode, siswa, atau laptop...">
+            </div>
+            <select id="filter" class="input sm:max-w-52">
+              <option value="Semua">Semua Status</option>
+              <option value="Terlambat">Terlambat</option>
+              <option value="Aman">Masih dalam batas waktu</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 text-slate-500" id="tableHead"></thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      lucide.createIcons();
+
+      let currentTab = 'active';
+      const today = new Date();
+
+      window.switchTab = function(tab) {
+        currentTab = tab;
+        const btnActive = document.getElementById('tabActiveBtn');
+        const btnHistory = document.getElementById('tabHistoryBtn');
+        const filterSelect = document.getElementById('filter');
+
+        if (tab === 'active') {
+          btnActive.className = 'px-4 py-2.5 font-semibold text-sm border-b-2 border-teal-700 text-teal-800';
+          btnHistory.className = 'px-4 py-2.5 font-medium text-sm text-slate-500 hover:text-slate-800';
+          filterSelect.classList.remove('hidden');
+        } else {
+          btnHistory.className = 'px-4 py-2.5 font-semibold text-sm border-b-2 border-teal-700 text-teal-800';
+          btnActive.className = 'px-4 py-2.5 font-medium text-sm text-slate-500 hover:text-slate-800';
+          filterSelect.classList.add('hidden');
+        }
+        render();
+      };
+
+      const getData = () => {
+        const loans = DB.get('peminjaman');
+        const students = DB.get('siswa');
+        const laptops = DB.get('laptops');
+        return loans.filter(x => x.status === 'Dipinjam').map(x => ({
+          ...x,
+          student: students.find(s => s.id == x.studentId),
+          laptop: laptops.find(l => l.id == x.laptopId),
+          late: new Date(x.returnPlan + 'T23:59:59') < today
+        }));
+      };
+
+      const render = () => {
+        const q = document.getElementById('search').value.toLowerCase();
+        const f = document.getElementById('filter').value;
+        const activeData = getData();
+        const returns = DB.get('pengembalian');
+        const students = DB.get('siswa');
+        const laptops = DB.get('laptops');
+
+        document.getElementById('stats').innerHTML = [
+          statCard('Masih Dipinjam', activeData.length, 'laptop'),
+          statCard('Terlambat', activeData.filter(x => x.late).length, 'triangle-alert'),
+          statCard('Total Pengembalian', returns.length, 'rotate-ccw')
+        ].join('');
+
+        if (currentTab === 'active') {
+          document.getElementById('tableHead').innerHTML = `
+            <tr>
+              <th class="px-4 py-3 text-left">Kode</th>
+              <th class="px-4 py-3 text-left">Siswa</th>
+              <th class="px-4 py-3 text-left">Laptop</th>
+              <th class="px-4 py-3 text-left">Batas Kembali</th>
+              <th class="px-4 py-3 text-left">Status</th>
+              <th class="px-4 py-3 text-right">Aksi</th>
+            </tr>
+          `;
+
+          const shown = activeData.filter(x => 
+            (f === 'Semua' || (f === 'Terlambat' && x.late) || (f === 'Aman' && !x.late)) &&
+            [x.code, x.student?.name, x.laptop?.name, x.laptop?.code].join(' ').toLowerCase().includes(q)
+          );
+
+          document.getElementById('rows').innerHTML = shown.map(x => `
+            <tr class="border-t border-slate-100 hover:bg-slate-50">
+              <td class="px-4 py-3 font-semibold text-slate-800">${esc(x.code)}</td>
+              <td class="px-4 py-3 font-medium">${esc(x.student?.name || '-')}</td>
+              <td class="px-4 py-3">${esc(x.laptop?.name || '-')} <span class="block text-xs text-slate-400 font-mono">${esc(x.laptop?.code || '-')}</span></td>
+              <td class="px-4 py-3">${formatDate(x.returnPlan)}</td>
+              <td class="px-4 py-3">${x.late ? '<span class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">Terlambat</span>' : '<span class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">Aman</span>'}</td>
+              <td class="px-4 py-3 text-right whitespace-nowrap">
+                <button class="icon-btn" title="Lihat detail" onclick="detailLoan(${x.id})"><i data-lucide="eye"></i></button>
+                <button class="btn-primary text-xs py-1.5 px-2.5" onclick="processAdminReturn(${x.id})"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Kembalikan</button>
+              </td>
+            </tr>
+          `).join('') || '<tr><td colspan="6" class="px-4 py-10 text-center text-slate-400">Tidak ada data peminjaman aktif.</td></tr>';
+        } else {
+          document.getElementById('tableHead').innerHTML = `
+            <tr>
+              <th class="px-4 py-3 text-left">Kode</th>
+              <th class="px-4 py-3 text-left">Siswa</th>
+              <th class="px-4 py-3 text-left">Laptop</th>
+              <th class="px-4 py-3 text-left">Tgl Kembali</th>
+              <th class="px-4 py-3 text-left">Kondisi Akhir</th>
+              <th class="px-4 py-3 text-left">Denda</th>
+              <th class="px-4 py-3 text-right">Aksi</th>
+            </tr>
+          `;
+
+          const enrichedReturns = returns.map(r => ({
+            ...r,
+            student: students.find(s => s.id == r.studentId),
+            laptop: laptops.find(l => l.id == r.laptopId)
+          })).filter(x => [x.code, x.student?.name, x.laptop?.name, x.condition].join(' ').toLowerCase().includes(q));
+
+          document.getElementById('rows').innerHTML = enrichedReturns.slice().reverse().map(x => `
+            <tr class="border-t border-slate-100 hover:bg-slate-50">
+              <td class="px-4 py-3 font-semibold text-slate-800">${esc(x.code)}</td>
+              <td class="px-4 py-3">${esc(x.student?.name || '-')}</td>
+              <td class="px-4 py-3">${esc(x.laptop?.name || '-')} <span class="block text-xs text-slate-400 font-mono">${esc(x.laptop?.code || '-')}</span></td>
+              <td class="px-4 py-3">${formatDate(x.returnedDate)}</td>
+              <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs font-medium ${x.condition === 'Baik' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${esc(x.condition)}</span></td>
+              <td class="px-4 py-3 font-mono text-xs">${x.penalty ? 'Rp ' + Number(x.penalty).toLocaleString('id-ID') : '-'}</td>
+              <td class="px-4 py-3 text-right">
+                <button class="icon-btn" title="Lihat detail" onclick="detailReturn(${x.id})"><i data-lucide="eye"></i></button>
+              </td>
+            </tr>
+          `).join('') || '<tr><td colspan="7" class="px-4 py-10 text-center text-slate-400">Belum ada riwayat pengembalian selesai.</td></tr>';
+        }
+
+        document.getElementById('updatedAt').textContent = 'Diperbarui ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        lucide.createIcons();
+      };
+
+      document.getElementById('search').addEventListener('input', render);
+      document.getElementById('filter').addEventListener('change', render);
+
+      window.detailLoan = function(id) {
+        const x = getData().find(a => a.id === id);
+        if (!x) return;
+        modal(
+          'Detail Transaksi Peminjaman',
+          `
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div><p class="text-xs text-slate-400">Kode Transaksi</p><p class="font-semibold mt-1">${esc(x.code)}</p></div>
+            <div><p class="text-xs text-slate-400">Status</p><p class="mt-1">${x.late ? '<span class="text-red-600 font-semibold">Terlambat</span>' : '<span class="text-emerald-600 font-semibold">Aman</span>'}</p></div>
+            <div><p class="text-xs text-slate-400">Siswa</p><p class="font-semibold mt-1">${esc(x.student?.name || '-')}</p></div>
+            <div><p class="text-xs text-slate-400">Laptop</p><p class="font-semibold mt-1">${esc(x.laptop?.name || '-')} (${esc(x.laptop?.code || '-')})</p></div>
+            <div><p class="text-xs text-slate-400">Mulai Dipinjam</p><p class="font-semibold mt-1">${formatDate(x.borrowDate)}</p></div>
+            <div><p class="text-xs text-slate-400">Batas Pengembalian</p><p class="font-semibold mt-1">${formatDate(x.returnPlan)}</p></div>
+            <div class="sm:col-span-2"><p class="text-xs text-slate-400">Keperluan</p><p class="font-semibold mt-1">${esc(x.purpose)}</p></div>
+          </div>
+          `,
+          '<button onclick="closeModal()" class="btn-secondary">Tutup</button>'
+        );
+      };
+
+      window.detailReturn = function(id) {
+        const returns = DB.get('pengembalian');
+        const x = returns.find(r => r.id === id);
+        if (!x) return;
+        const students = DB.get('siswa');
+        const laptops = DB.get('laptops');
+        const s = students.find(a => a.id == x.studentId);
+        const l = laptops.find(a => a.id == x.laptopId);
+
+        modal(
+          'Detail Riwayat Pengembalian',
+          `
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div><p class="text-xs text-slate-400">Kode Transaksi</p><p class="font-semibold mt-1">${esc(x.code)}</p></div>
+            <div><p class="text-xs text-slate-400">Tanggal Pengembalian</p><p class="font-semibold mt-1">${formatDate(x.returnedDate)}</p></div>
+            <div><p class="text-xs text-slate-400">Siswa Peminjam</p><p class="font-semibold mt-1">${esc(s?.name || '-')}</p></div>
+            <div><p class="text-xs text-slate-400">Laptop</p><p class="font-semibold mt-1">${esc(l?.name || '-')} (${esc(l?.code || '-')})</p></div>
+            <div><p class="text-xs text-slate-400">Kondisi Saat Kembali</p><p class="font-semibold mt-1 text-emerald-700">${esc(x.condition)}</p></div>
+            <div><p class="text-xs text-slate-400">Denda</p><p class="font-semibold mt-1">Rp ${Number(x.penalty || 0).toLocaleString('id-ID')}</p></div>
+            <div><p class="text-xs text-slate-400">Petugas Penerima</p><p class="font-semibold mt-1">${esc(x.officerName || '-')}</p></div>
+            <div class="sm:col-span-2"><p class="text-xs text-slate-400">Catatan Pengembalian</p><p class="font-semibold mt-1">${esc(x.note || '-')}</p></div>
+          </div>
+          `,
+          '<button onclick="closeModal()" class="btn-secondary">Tutup</button>'
+        );
+      };
+
+      window.processAdminReturn = function(id) {
+        const x = getData().find(a => a.id === id);
+        if (!x) return;
+        const todayStr = new Date().toISOString().slice(0, 10);
+
+        modal(
+          'Konfirmasi Pengembalian Laptop',
+          `
+          <form id="adminReturnForm" class="space-y-4" novalidate>
+            <p class="text-xs text-slate-500">Memproses pengembalian unit <b>${esc(x.laptop?.name)}</b> dari peminjam <b>${esc(x.student?.name)}</b>.</p>
+            <div>
+              <label class="label">Kondisi Laptop <span class="text-red-500">*</span></label>
+              <select id="condition" name="condition" class="input" required>
+                <option value="Baik" selected>Baik</option>
+                <option value="Perlu diperiksa">Perlu diperiksa</option>
+                <option value="Rusak Ringan">Rusak Ringan</option>
+                <option value="Rusak Berat">Rusak Berat</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Catatan Pengembalian</label>
+              <textarea id="note" name="note" class="input" rows="2" placeholder="Catatan fisik perangkat"></textarea>
+            </div>
+          </form>
+          `,
+          `
+          <button onclick="closeModal()" class="btn-secondary">Batal</button>
+          <button onclick="saveAdminReturn(${id})" class="btn-primary">
+            <i data-lucide="shield-check"></i> Simpan (Prepared)
+          </button>
+          `
+        );
+        lucide.createIcons();
+      };
+
+      window.saveAdminReturn = function(id) {
+        const x = getData().find(a => a.id === id);
+        if (!x) return;
+        const condition = document.getElementById('condition').value;
+        const note = document.getElementById('note').value.trim() || 'Dikembalikan dalam kondisi ' + condition;
+        const todayStr = new Date().toISOString().slice(0, 10);
+
+        let newLaptopStatus = 'Tersedia';
+        if (condition === 'Rusak Berat') newLaptopStatus = 'Rusak';
+        else if (condition === 'Rusak Ringan' || condition === 'Perlu diperiksa') newLaptopStatus = 'Maintenance';
+
+        DB.beginTransaction();
+        try {
+          const stmtReturn = DB.prepare("INSERT INTO pengembalian (peminjamanId, code, studentId, laptopId, returnedDate, condition, note, penalty, officerName) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+          stmtReturn.execute([x.id, x.code, x.studentId, x.laptopId, todayStr, condition, note, 0, user.name]);
+
+          const stmtLoan = DB.prepare("UPDATE peminjaman SET status = ?, returnedDate = ?, note = ? WHERE id = ?");
+          stmtLoan.execute(['Dikembalikan', todayStr, note, x.id]);
+
+          const stmtLaptop = DB.prepare("UPDATE laptops SET status = ?, condition = ? WHERE id = ?");
+          stmtLaptop.execute([newLaptopStatus, condition, x.laptopId]);
+
+          DB.commit();
+          closeModal();
+          toast('Pengembalian berhasil diproses (Prepared Statement)');
+          render();
+        } catch (err) {
+          DB.rollback();
+          toast('Gagal: ' + err.message, 'error');
+        }
+      };
+
+      render();
+    }
+  </script>
+</body>
+</html>

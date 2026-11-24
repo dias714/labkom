@@ -1,0 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+:root{--ink:#172033;--muted:#64748b;--line:#e2e8f0;--brand:#0f766e;--brand-dark:#115e59;--wash:#f4f8f7;--shadow:0 16px 42px rgba(15,23,42,.08)}
+*{box-sizing:border-box} html{scroll-behavior:smooth} body{font-family:'DM Sans',system-ui,sans-serif;color:var(--ink);background:var(--wash);background-image:radial-gradient(circle at 10% 0%,rgba(20,184,166,.08),transparent 28rem),radial-gradient(circle at 90% 20%,rgba(245,158,11,.07),transparent 24rem)}
+h1,h2,h3,h4,.font-bold{font-family:'Space Grotesk','DM Sans',sans-serif;letter-spacing:0}
+.label{display:block;font-size:.875rem;font-weight:600;color:#334155;margin-bottom:.45rem}
+.input{width:100%;border:1px solid #cbd5e1;border-radius:.8rem;padding:.7rem .85rem;outline:none;background:rgba(255,255,255,.92);transition:border-color .2s,box-shadow .2s,transform .2s}
+.input:focus{border-color:#0f766e;box-shadow:0 0 0 3px rgba(15,118,110,.13);transform:translateY(-1px)}
+.input.is-invalid{border-color:#ef4444!important;background:#fff8f8!important;box-shadow:0 0 0 3px rgba(239,68,68,.12)!important}
+.input.is-valid{border-color:#10b981;box-shadow:0 0 0 2px rgba(16,185,129,.1)}
+.form-error{color:#dc2626;font-size:0.75rem;margin-top:0.35rem;font-weight:500;display:flex;align-items:center;gap:0.35rem;animation:fadeIn .2s ease}
+.form-helper{color:#64748b;font-size:0.75rem;margin-top:0.35rem}
+.badge-prepared{display:inline-flex;align-items:center;gap:.35rem;font-size:.7rem;padding:.2rem .5rem;border-radius:.5rem;background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
+.btn-primary,.btn-secondary,.btn-danger,.btn-success{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border-radius:.8rem;padding:.65rem .9rem;font-weight:600;transition:transform .2s,box-shadow .2s,background .2s;cursor:pointer}
+.btn-primary{background:var(--brand);color:#fff;box-shadow:0 8px 18px rgba(15,118,110,.18)}.btn-primary:hover{background:var(--brand-dark);transform:translateY(-2px);box-shadow:0 12px 24px rgba(15,118,110,.24)}
+.btn-secondary{background:#e8f0ef;color:#334155}.btn-secondary:hover{background:#dbe7e5;transform:translateY(-1px)}
+.btn-danger{background:#fee2e2;color:#b91c1c}.btn-danger:hover{background:#fecaca}
+.btn-success{background:#dcfce7;color:#166534}.btn-success:hover{background:#bbf7d0}
+.icon-btn{display:inline-grid;place-items:center;width:2.2rem;height:2.2rem;border-radius:.65rem;color:#475569;transition:.2s}.icon-btn:hover{background:#dcebea;color:var(--brand);transform:translateY(-1px)}
+.sidebar{width:260px;transition:.25s;box-shadow:8px 0 28px rgba(15,23,42,.03)}.page{min-width:0}.page main{animation:pageIn .45s ease both}
+.sidebar nav a{transition:background .2s,color .2s,transform .2s}.sidebar nav a:hover{transform:translateX(3px)}
+.sidebar nav a.bg-blue-50{background:#dff3ef;color:var(--brand)}
+main .bg-white{box-shadow:0 10px 30px rgba(15,23,42,.035);transition:box-shadow .2s,transform .2s} main .bg-white:hover{box-shadow:var(--shadow)}
+main .grid>div.bg-white{animation:riseIn .45s ease both}
+@media(max-width:767px){.sidebar{position:fixed;z-index:50;left:-280px;top:0;bottom:0}.sidebar.open{left:0}.overlay{display:none}.overlay.show{display:block}}
+table{min-width:720px} th{font-size:.72rem;letter-spacing:.05em;text-transform:uppercase} td{border-color:#eef2f3}.table-wrap{overflow-x:auto}
+.modal-backdrop{background:rgba(15,23,42,.48);backdrop-filter:blur(5px);animation:fadeIn .2s ease}.modal-backdrop>div{animation:modalIn .25s ease both}
+.toast{animation:slideIn .25s ease}
+@keyframes slideIn{from{transform:translateY(12px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes pageIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@keyframes riseIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes modalIn{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
+/* Komponen Tambahan: Upload Foto, Pagination & Flash Message */
+.upload-dropzone{border:2px dashed #cbd5e1;border-radius:1rem;padding:1.25rem;text-align:center;background:#f8fafc;cursor:pointer;transition:border-color .2s,background .2s}
+.upload-dropzone:hover,.upload-dropzone.dragover{border-color:#0f766e;background:#f0fdfa}
+.page-btn{min-width:2.25rem;height:2.25rem;padding:0 .5rem;display:inline-flex;align-items:center;justify-content:center;border-radius:.6rem;font-size:.8125rem;font-weight:600;border:1px solid #e2e8f0;background:#ffffff;color:#475569;transition:all .2s;cursor:pointer}
+.page-btn:hover:not(:disabled){border-color:#0f766e;color:#0f766e;background:#f0fdfa}
+.page-btn.active{background:#0f766e;color:#ffffff;border-color:#0f766e;box-shadow:0 4px 10px rgba(15,118,110,.25)}
+.page-btn:disabled{opacity:.4;cursor:not-allowed}

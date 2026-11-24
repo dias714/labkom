@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Debug & Reset LocalStorage</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 p-8 font-sans">
+  <div class="max-w-2xl mx-auto space-y-4">
+    <h1 class="text-2xl font-bold text-slate-800">🔧 Debug Tool — Aplikasi Peminjaman Laptop</h1>
+    <p class="text-sm text-slate-500">Gunakan tool ini untuk melihat dan membersihkan data LocalStorage yang mungkin bermasalah.</p>
+
+    <div class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+      <h2 class="font-bold text-slate-700">Isi LocalStorage Saat Ini</h2>
+      <pre id="output" class="bg-slate-50 p-4 rounded-xl text-xs overflow-auto max-h-80 text-slate-700"></pre>
+    </div>
+
+    <div class="flex flex-wrap gap-3">
+      <button onclick="showData()" class="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700">
+        Lihat Data
+      </button>
+      <button onclick="clearUsers()" class="px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-semibold hover:bg-amber-600">
+        Hapus Tabel Users (Reset)
+      </button>
+      <button onclick="clearSiswa()" class="px-4 py-2 bg-orange-500 text-white rounded-xl text-sm font-semibold hover:bg-orange-600">
+        Hapus Tabel Siswa (Reset)
+      </button>
+      <button onclick="resetAll()" class="px-4 py-2 bg-rose-600 text-white rounded-xl text-sm font-semibold hover:bg-rose-700">
+        ⚠️ Reset SEMUA Data
+      </button>
+      <button onclick="removeDuplicateUsers()" class="px-4 py-2 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-teal-700">
+        Bersihkan Duplikat Users
+      </button>
+    </div>
+
+    <div id="status" class="hidden p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium"></div>
+  </div>
+
+  <script>
+    function showData() {
+      const keys = ['users', 'siswa', 'petugas', 'laptops', 'peminjaman', 'pengembalian'];
+      const result = {};
+      keys.forEach(k => {
+        try {
+          const val = localStorage.getItem(k);
+          result[k] = val ? JSON.parse(val) : null;
+        } catch(e) {
+          result[k] = '[ERROR PARSE: ' + e.message + ']';
+        }
+      });
+      document.getElementById('output').textContent = JSON.stringify(result, null, 2);
+    }
+
+    function showStatus(msg, type = 'success') {
+      const el = document.getElementById('status');
+      el.className = type === 'success'
+        ? 'p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium'
+        : 'p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-medium';
+      el.textContent = msg;
+      el.classList.remove('hidden');
+      setTimeout(() => el.classList.add('hidden'), 4000);
+    }
+
+    function clearUsers() {
+      if (!confirm('Hapus semua data di tabel users? (akan di-seed ulang saat halaman siswa dibuka)')) return;
+      localStorage.removeItem('users');
+      showStatus('✅ Tabel users berhasil dihapus. Refresh halaman siswa untuk seed ulang.');
+      showData();
+    }
+
+    function clearSiswa() {
+      if (!confirm('Hapus semua data di tabel siswa?')) return;
+      localStorage.removeItem('siswa');
+      showStatus('✅ Tabel siswa berhasil dihapus. Refresh halaman siswa untuk seed ulang.');
+      showData();
+    }
+
+    function resetAll() {
+      if (!confirm('⚠️ RESET SEMUA DATA LocalStorage? Semua data akan hilang dan di-seed ulang!')) return;
+      ['users','siswa','petugas','laptops','peminjaman','pengembalian','session'].forEach(k => localStorage.removeItem(k));
+      showStatus('✅ Semua data berhasil direset. Silakan refresh halaman utama.');
+      showData();
+    }
+
+    function removeDuplicateUsers() {
+      try {
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
+        const seen = new Set();
+        const cleaned = users.filter(u => {
+          if (seen.has(u.username)) return false;
+          seen.add(u.username);
+          return true;
+        });
+        localStorage.setItem('users', JSON.stringify(cleaned));
+        showStatus(`✅ Duplikat users dibersihkan. Tersisa ${cleaned.length} dari ${users.length} user.`);
+        showData();
+      } catch(e) {
+        showStatus('❌ Error: ' + e.message, 'error');
+      }
+    }
+
+    // Langsung tampilkan data saat halaman dibuka
+    showData();
+  </script>
+</body>
+</html>

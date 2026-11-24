@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Peminjaman Aktif - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/validator.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['petugas']);
+    if (user) {
+      layout('Peminjaman Aktif', 'petugas', 'Peminjaman Aktif');
+      document.getElementById('content').innerHTML = `
+        <div class="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Peminjaman Aktif</h2>
+            <p class="text-sm text-slate-500">Daftar seluruh unit laptop yang sedang berada di tangan siswa.</p>
+          </div>
+        </div>
+        <div id="list" class="grid md:grid-cols-2 gap-4"></div>
+      `;
+      lucide.createIcons();
+
+      const p = DB.get('peminjaman').filter(x => x.status === 'Dipinjam');
+      const s = DB.get('siswa');
+      const l = DB.get('laptops');
+
+      document.getElementById('list').innerHTML = p.map(x => {
+        const student = s.find(a => a.id == x.studentId);
+        const lap = l.find(a => a.id == x.laptopId);
+        const isLate = new Date(x.returnPlan + 'T23:59:59') < new Date();
+
+        return `
+          <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-start">
+                <div class="flex items-center gap-2">
+                  ${badge(x.status)}
+                  <span class="text-xs font-mono font-semibold text-slate-500">${esc(x.code)}</span>
+                </div>
+                ${isLate ? '<span class="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700 font-semibold">Terlambat</span>' : ''}
+              </div>
+              <h3 class="font-bold text-slate-800 text-lg mt-3">${esc(student?.name || '-')}</h3>
+              <p class="text-xs text-slate-400">${esc(student?.nis || '-')} • ${esc(student?.kelas || '-')}</p>
+              <div class="mt-3 p-3 bg-slate-50 rounded-xl text-xs text-slate-600 space-y-1">
+                <p><b>Unit:</b> ${esc(lap?.name || '-')} [${esc(lap?.code || '-')}]</p>
+                <p><b>Pinjam:</b> ${formatDate(x.borrowDate)} | <b>Kembali:</b> ${formatDate(x.returnPlan)}</p>
+                <p><b>Keperluan:</b> <i>"${esc(x.purpose)}"</i></p>
+              </div>
+            </div>
+            <div class="mt-4 pt-3 border-t border-slate-100 flex justify-end">
+              <a href="pengembalian.html" class="btn-primary text-xs py-2 px-3">
+                <i data-lucide="rotate-ccw"></i> Proses di Pengembalian
+              </a>
+            </div>
+          </div>
+        `;
+      }).join('') || '<div class="col-span-2 bg-white border rounded-2xl p-8 text-center text-slate-400">Tidak ada peminjaman aktif saat ini.</div>';
+
+      lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

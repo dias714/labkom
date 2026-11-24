@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Status Peminjaman - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['siswa']);
+    if (user) {
+      layout('Status Peminjaman', 'siswa', 'Status Peminjaman');
+      document.getElementById('content').innerHTML = `
+        <div class="mb-5">
+          <h2 class="text-2xl font-bold">Status Peminjaman</h2>
+          <p class="text-sm text-slate-500">Pantau proses pengajuan peminjaman laptop Anda.</p>
+        </div>
+        <div id="list" class="space-y-4"></div>
+      `;
+      lucide.createIcons();
+
+      const u = currentUser();
+      const s = DB.get('siswa').find(x => x.username === u.username);
+
+      function render() {
+        const p = DB.get('peminjaman').filter(x => x.studentId === s?.id);
+        const l = DB.get('laptops');
+
+        const html = p.slice().reverse().map(x => {
+          const lap = l.find(a => a.id == x.laptopId);
+          return `
+            <div class="bg-white border rounded-2xl p-5">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <p class="font-bold text-slate-800">${esc(x.code)}</p>
+                  <p class="text-sm text-slate-500 mt-1">${esc(lap?.name || '-')} (${esc(lap?.code || '-')})</p>
+                </div>
+                <div>${badge(x.status)}</div>
+              </div>
+              <div class="grid sm:grid-cols-3 gap-4 mt-5 text-sm">
+                <div>
+                  <p class="text-slate-400">Pengajuan</p>
+                  <p class="font-medium text-slate-700">${formatDate(x.requestDate)}</p>
+                </div>
+                <div>
+                  <p class="text-slate-400">Rencana Kembali</p>
+                  <p class="font-medium text-slate-700">${formatDate(x.returnPlan)}</p>
+                </div>
+                <div>
+                  <p class="text-slate-400">Keperluan</p>
+                  <p class="font-medium text-slate-700">${esc(x.purpose)}</p>
+                </div>
+              </div>
+              ${x.note ? `<div class="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-500"><span class="font-semibold text-slate-600">Catatan Petugas:</span> ${esc(x.note)}</div>` : ''}
+            </div>
+          `;
+        }).join('');
+
+        document.getElementById('list').innerHTML = html || '<div class="bg-white border rounded-2xl p-7 text-center text-slate-400">Belum ada pengajuan.</div>';
+        lucide.createIcons();
+      }
+
+      render();
+    }
+  </script>
+</body>
+</html>

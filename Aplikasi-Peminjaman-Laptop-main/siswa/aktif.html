@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Peminjaman Aktif - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['siswa']);
+    if (user) {
+      layout('Peminjaman Aktif', 'siswa', 'Peminjaman Aktif');
+      document.getElementById('content').innerHTML = `
+        <div class="mb-5">
+          <h2 class="text-2xl font-bold text-slate-900">Peminjaman Aktif</h2>
+          <p class="text-sm text-slate-500">Daftar unit laptop yang sedang Anda pinjam dan gunakan.</p>
+        </div>
+        <div id="list" class="space-y-4"></div>
+      `;
+      lucide.createIcons();
+
+      const u = currentUser();
+      const s = DB.get('siswa').find(x => x.username === u.username);
+
+      function render() {
+        const p = DB.get('peminjaman').filter(x => x.studentId === s?.id && x.status === 'Dipinjam');
+        const l = DB.get('laptops');
+
+        document.getElementById('list').innerHTML = p.map(x => {
+          const lap = l.find(a => a.id == x.laptopId);
+          const isLate = new Date(x.returnPlan + 'T23:59:59') < new Date();
+          const hasRequestedReturn = x.note && x.note.includes('diajukan oleh siswa');
+
+          return `
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div class="flex items-center gap-2">
+                  ${badge(x.status)}
+                  <span class="text-xs font-mono font-semibold text-slate-500">${esc(x.code)}</span>
+                  ${isLate ? '<span class="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700 font-semibold">Melewati Batas Waktu</span>' : ''}
+                </div>
+                <h3 class="font-bold text-lg text-slate-800 mt-2">${esc(lap?.name || '-')} <span class="text-sm text-slate-500 font-normal">(${esc(lap?.code || '-')})</span></h3>
+                <p class="text-sm text-slate-600 mt-1">${esc(lap?.brand || '')} ${esc(lap?.model || '')} • ${esc(lap?.processor || '')}</p>
+                <div class="mt-3 text-xs text-slate-400 space-y-0.5">
+                  <p>Tanggal Pinjam: <b>${formatDate(x.borrowDate)}</b></p>
+                  <p>Batas Pengembalian: <b class="${isLate ? 'text-red-600' : 'text-slate-700'}">${formatDate(x.returnPlan)}</b></p>
+                </div>
+                ${hasRequestedReturn ? `
+                  <div class="mt-3 p-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-1.5">
+                    <i data-lucide="clock" class="w-4 h-4"></i> Anda telah mengajukan pengembalian. Silakan serahkan unit ke petugas lab.
+                  </div>
+                ` : ''}
+              </div>
+              <div class="shrink-0">
+                ${hasRequestedReturn ? `
+                  <button disabled class="btn-secondary opacity-75 cursor-not-allowed">
+                    <i data-lucide="check-circle"></i> Menunggu Petugas
+                  </button>
+                ` : `
+                  <button onclick="returnReq(${x.id})" class="btn-primary">
+                    <i data-lucide="rotate-ccw"></i> Ajukan Pengembalian
+                  </button>
+                `}
+              </div>
+            </div>
+          `;
+        }).join('') || '<div class="bg-white border rounded-2xl p-8 text-center text-slate-400"><i data-lucide="check-circle" class="w-8 h-8 text-emerald-500 mx-auto mb-2"></i><p class="font-semibold text-slate-700">Tidak ada peminjaman aktif saat ini.</p></div>';
+
+        lucide.createIcons();
+      }
+
+      window.returnReq = function(id) {
+        modal(
+          'Konfirmasi Pengembalian Laptop',
+          `
+          <p class="text-slate-600 text-sm">Apakah Anda siap mengembalikan laptop ini ke laboratorium? Petugas lab akan melakukan pemeriksaan fisik dan kelengkapan unit saat serah terima.</p>
+          `,
+          `
+          <button onclick="closeModal()" class="btn-secondary">Batal</button>
+          <button onclick="doReturn(${id})" class="btn-primary">
+            <i data-lucide="shield-check"></i> Ya, Ajukan Pengembalian
+          </button>
+          `
+        );
+      };
+
+      window.doReturn = function(id) {
+        // Update dengan PREPARED STATEMENT
+        const stmt = DB.prepare("UPDATE peminjaman SET note = ? WHERE id = ?");
+        stmt.execute(['Pengembalian diajukan oleh siswa, menunggu cek fisik petugas', id]);
+
+        closeModal();
+        toast('Pengajuan pengembalian berhasil dikirim ke petugas');
+        render();
+      };
+
+      render();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Dashboard - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/validator.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['siswa']);
+    if (user) {
+      layout('Dashboard Siswa', 'siswa', 'Dashboard');
+      document.getElementById('content').innerHTML = `
+        <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <p class="text-slate-500 text-sm">Selamat datang kembali, <b>${esc(user.name)}</b>.</p>
+            <h2 class="text-2xl font-bold text-slate-900 mt-1">Dashboard Peminjaman Siswa</h2>
+          </div>
+          <a href="peminjaman.html" class="btn-primary">
+            <i data-lucide="plus"></i> Ajukan Peminjaman Baru
+          </a>
+        </div>
+        <div id="stats" class="grid sm:grid-cols-2 xl:grid-cols-4 gap-4"></div>
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 mt-5 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold text-slate-800">Aktivitas & Riwayat Terbaru</h3>
+            <a href="riwayat.html" class="text-xs text-teal-700 hover:underline">Lihat semua riwayat →</a>
+          </div>
+          <div id="recent" class="space-y-3"></div>
+        </div>
+      `;
+      lucide.createIcons();
+
+      const u = currentUser();
+      const ss = DB.get('siswa').find(x => x.username === u.username);
+      const p = DB.get('peminjaman').filter(x => x.studentId === ss?.id);
+      const l = DB.get('laptops');
+
+      document.getElementById('stats').innerHTML = [
+        statCard('Laptop Tersedia', l.filter(x => x.status === 'Tersedia').length, 'laptop'),
+        statCard('Pengajuan Menunggu', p.filter(x => x.status === 'Menunggu').length, 'hourglass'),
+        statCard('Laptop Sedang Dipinjam', p.filter(x => x.status === 'Dipinjam').length, 'clock-3'),
+        statCard('Total Riwayat', p.length, 'history')
+      ].join('');
+
+      document.getElementById('recent').innerHTML = p.slice().reverse().slice(0, 5).map(x => `
+        <div class="flex justify-between items-center p-3 rounded-xl border border-slate-100 hover:bg-slate-50 transition">
+          <div>
+            <p class="font-semibold text-slate-800">${esc(l.find(a => a.id == x.laptopId)?.name || '-')}</p>
+            <p class="text-xs text-slate-400 mt-0.5">${esc(x.code)} • Pengajuan: ${formatDate(x.requestDate)}</p>
+          </div>
+          <div>${badge(x.status)}</div>
+        </div>
+      `).join('') || '<p class="text-slate-400 text-sm text-center py-6">Belum ada aktivitas transaksi peminjaman.</p>';
+
+      lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

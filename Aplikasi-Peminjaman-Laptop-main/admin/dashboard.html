@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Dashboard - Lab Laptop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/validator.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    const user = guard(['admin']);
+    if (user) {
+      layout('Dashboard', 'admin', 'Dashboard');
+      document.getElementById('content').innerHTML = `
+        <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <p class="text-slate-500 text-sm">Selamat datang, <b>${esc(user.name)}</b>. Ringkasan operasional sistem peminjaman laptop.</p>
+            <h2 class="text-2xl font-bold text-slate-900 mt-1">Dashboard Administrator</h2>
+          </div>
+          <div class="flex gap-2">
+            <a href="laptop.html" class="btn-secondary text-xs"><i data-lucide="laptop"></i> Kelola Laptop</a>
+            <a href="peminjaman.html" class="btn-primary text-xs"><i data-lucide="clipboard-list"></i> Lihat Transaksi</a>
+          </div>
+        </div>
+        <div id="stats" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"></div>
+        <div class="grid xl:grid-cols-3 gap-5 mt-5">
+          <div class="xl:col-span-2 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <div class="flex justify-between items-center mb-6">
+              <div>
+                <h3 class="font-bold text-slate-800">Aktivitas & Status Peminjaman</h3>
+                <p class="text-xs text-slate-400">Ringkasan distribusi transaksi saat ini</p>
+              </div>
+              <span class="text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full font-medium border border-emerald-200">
+                Prepared DB Active
+              </span>
+            </div>
+            <div id="bars" class="h-48 flex items-end gap-4 px-2"></div>
+          </div>
+          <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <h3 class="font-bold text-slate-800 mb-1">Transaksi Terbaru</h3>
+            <p class="text-xs text-slate-400 mb-4">5 pengajuan terakhir</p>
+            <div id="recent" class="space-y-3"></div>
+          </div>
+        </div>
+      `;
+      lucide.createIcons();
+
+      const laptops = DB.get('laptops');
+      const students = DB.get('siswa');
+      const loans = DB.get('peminjaman');
+
+      document.getElementById('stats').innerHTML = [
+        statCard('Total Laptop', laptops.length, 'laptop'),
+        statCard('Laptop Tersedia', laptops.filter(x => x.status === 'Tersedia').length, 'circle-check'),
+        statCard('Laptop Dipinjam', laptops.filter(x => x.status === 'Dipinjam').length, 'clock-3'),
+        statCard('Laptop Maintenance', laptops.filter(x => x.status === 'Maintenance').length, 'wrench'),
+        statCard('Total Siswa', students.length, 'users'),
+        statCard('Total Peminjaman', loans.length, 'clipboard-list'),
+        statCard('Menunggu Disetujui', loans.filter(x => x.status === 'Menunggu').length, 'hourglass'),
+        statCard('Selesai Dikembalikan', loans.filter(x => x.status === 'Dikembalikan').length, 'check-circle')
+      ].join('');
+
+      const statuses = ['Menunggu', 'Dipinjam', 'Dikembalikan', 'Ditolak'];
+      const max = Math.max(1, ...statuses.map(s => loans.filter(x => x.status === s).length));
+
+      document.getElementById('bars').innerHTML = statuses.map(s => {
+        const count = loans.filter(x => x.status === s).length;
+        const height = Math.max(16, (count / max) * 140);
+        const color = s === 'Menunggu' ? 'bg-amber-500' : s === 'Dipinjam' ? 'bg-blue-600' : s === 'Dikembalikan' ? 'bg-emerald-600' : 'bg-rose-500';
+
+        return `
+          <div class="flex-1 flex flex-col justify-end items-center gap-2">
+            <span class="text-xs font-bold text-slate-700">${count}</span>
+            <div class="w-full max-w-16 ${color} rounded-t-xl transition-all duration-500" style="height:${height}px"></div>
+            <span class="text-[11px] font-medium text-slate-500 text-center">${s}</span>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('recent').innerHTML = loans.slice(-5).reverse().map(x => {
+        const s = students.find(a => a.id === x.studentId)?.name || '-';
+        return `
+          <div class="flex justify-between items-center p-2.5 rounded-xl border border-slate-100 hover:bg-slate-50 transition">
+            <div>
+              <p class="font-medium text-sm text-slate-800">${esc(s)}</p>
+              <p class="text-xs text-slate-400 font-mono">${esc(x.code)} • ${formatDate(x.requestDate)}</p>
+            </div>
+            <div>${badge(x.status)}</div>
+          </div>
+        `;
+      }).join('') || '<p class="text-xs text-slate-400 text-center py-4">Belum ada transaksi.</p>';
+
+      lucide.createIcons();
+    }
+  </script>
+</body>
+</html>
